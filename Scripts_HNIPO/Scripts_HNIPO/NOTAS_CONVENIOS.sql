@@ -1,0 +1,46 @@
+select 
+count(*)
+from
+(
+select  nf.cd_atendimento,
+        NF.CD_REG_FAT,
+        NF.CD_REG_AMB,
+        decode(atd.tp_atendimento,'A','AMBULATORIO','E','EXTERNO','U','URGENCIA','I','INTERNADO')TP_ATENDIMENTO,
+        nf.dt_emissao EMISSAO,
+        nf.nm_cliente CLIENTE,
+        nf.nr_id_nota_fiscal RPS,
+        nvl(TO_CHAR(nf.nr_nota_fiscal_nfe),'SEM CONVERTER') NFE,
+        nf.ds_retorno_nfe,
+        nf.cd_multi_empresa empresa
+from nota_fiscal nf
+left join atendime atd on atd.cd_atendimento = nf.cd_atendimento
+where nf.dt_emissao between '01/02/2022' and '28/02/2022'
+and nf.nr_nota_fiscal_nfe is null
+and nf.cd_multi_empresa = 1
+and nf.cd_atendimento is null
+and nf.cd_reg_fat is null
+and nf.cd_reg_amb is null
+order by 5,6
+)
+;
+
+select  nf.cd_atendimento,
+        NF.CD_REG_FAT,
+        NF.CD_REG_AMB,
+        decode(atd.tp_atendimento,'A','AMBULATORIO','E','EXTERNO','U','URGENCIA','I','INTERNADO')TP_ATENDIMENTO,
+        nf.dt_emissao EMISSAO,
+        nf.nm_cliente CLIENTE,
+        nf.nr_id_nota_fiscal RPS,
+        nvl(TO_CHAR(nf.nr_nota_fiscal_nfe),'SEM CONVERTER') NFE,
+        nf.ds_retorno_nfe,
+        nf.cd_multi_empresa empresa
+from nota_fiscal nf
+left join atendime atd on atd.cd_atendimento = nf.cd_atendimento
+where nf.dt_emissao between '01/02/2022' and '28/02/2022'
+and nf.nr_nota_fiscal_nfe is null
+and nf.cd_multi_empresa = 1
+and nf.cd_atendimento is null
+and nf.cd_reg_fat is null
+and nf.cd_reg_amb is null
+order by 5,6
+--AND nf.ds_retorno_nfe is not null

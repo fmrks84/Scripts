@@ -1,0 +1,15 @@
+select * from DBAMV.V_TISS_STATUS_PROTOCOLO A      -- 1° 
+where a.cd_remessa in (373395)--(195899);
+
+select * from tiss_lote b where b.id_pai in(3362567) --for update; -- 2° colocar o id da tabela  V_TISS_STATUS_PROTOCOLO
+
+select from site_xml c where c.cd_site_servico = 561
+and c.cd_wizard_origem in(3362567) for update           -- 3° colocar o id_pai da tabela tiss_lote 
+
+
+--delete from tiss_guia where cd_remessa = 373395;
+
+select * from remessa_fatura where cd_remessa = 371206;
+select * from fatura where cd_fatura = 50988
+
+--select * from tiss_mensagem z where z.nr_lote = 19718 for update  -- 19529/ 19718

@@ -1,0 +1,139 @@
+
+--INSERIR SETORES SANTA MARIA.
+declare
+   cursor c_setor is
+      select unid_int.cd_unid_int, setor.cd_setor, unid_int.ds_unid_int
+        from dbamv.setor, dbamv.unid_int
+       where cd_multi_empresa = 13
+         and setor.cd_setor = unid_int.cd_setor;
+--
+cursor c_usuario is
+select  cd_usuario
+  from dbasgu.usuarios
+where cd_usuario in
+       ('AFSENA', 'FPSILVA', 'RASOLIVEIRA', 'ALUNA', 'DBOVO', 'FMARAUJO',
+        'IBSANTOS', 'MGVIEIRA', 'PFLIMA', 'PPADILLA', 'TCSILVA', 'VANCESAR',
+        'FAFERREIRA', 'ASOLA', 'GRADIAS', 'JCASSAVARA', 'NSANTANA', 'NSABBAS',
+        'PADASILVA', 'PCROCHA', 'SEMLEITE', 'ALINESA', 'DJFERREIRA',
+        'DFERMINO', 'DOCONCEICAO', 'JUCRISTINA', 'LROCOSTA', 'MIOPEREIRA',
+        'PNOVAIS', 'PVIANA', 'SMARCON', 'VLEAL', 'PNOVAES', 'DBOMFIM',
+        'JPTORRES', 'LKRENKIN', 'RMGOMES', 'SSTELLE', 'TJESUS', 'ANSSILVA',
+        'DRPAULA', 'JCANDRADE', 'PBARRIONUEVO', 'TCMAGALHAES', 'ANATALI',
+        'APSILVEIRA', 'CMATSUOKA', 'JCMORAES', 'MDOMINGUES', 'DRIMONTEIRO',
+        'CADAMACENO', 'CDOMINGUES', 'JCATIAL', 'KETGOMES', 'SSFONSECA',
+        'SSMONTEIRO', 'TNEPOMUCENO', 'YREIS', 'ZBONFIM');
+
+begin
+   for r_usuario in c_usuario
+   loop
+      for r_setor in c_setor
+      loop
+         begin
+            insert into dbamv.usuario_unid_int
+              (cd_unid_int, cd_id_usuario, cd_setor)
+            values
+               (r_setor.cd_unid_int, r_usuario.cd_usuario,
+                r_setor.cd_setor);
+         exception
+            when dup_val_on_index then
+               null;
+         end;
+         begin
+            insert into dbamv.usuario_unid_int
+               (cd_unid_int, cd_id_usuario, cd_setor)
+            values
+               (null, r_usuario.cd_usuario, r_setor.cd_setor);
+         exception
+            when dup_val_on_index then
+               null;
+         end;
+         commit;
+      end loop;
+   end loop;
+end;
+
+---------------------------------------------------------------------
+
+--INSERIR EMPRESA PARA O SANTA MARIA.
+declare
+   cursor c_usuario is
+      select cd_usuario
+        from dbasgu.usuarios
+       where cd_usuario in
+             ('AFSENA', 'FPSILVA', 'RASOLIVEIRA', 'ALUNA', 'DBOVO',
+              'FMARAUJO', 'IBSANTOS', 'MGVIEIRA', 'PFLIMA', 'PPADILLA',
+              'TCSILVA', 'VANCESAR', 'FAFERREIRA', 'ASOLA', 'GRADIAS',
+              'JCASSAVARA', 'NSANTANA', 'NSABBAS', 'PADASILVA', 'PCROCHA',
+              'SEMLEITE', 'ALINESA', 'DJFERREIRA', 'DFERMINO', 'DOCONCEICAO',
+              'JUCRISTINA', 'LROCOSTA', 'MIOPEREIRA', 'PNOVAIS', 'PVIANA',
+              'SMARCON', 'VLEAL', 'PNOVAES', 'DBOMFIM', 'JPTORRES',
+              'LKRENKIN', 'RMGOMES', 'SSTELLE', 'TJESUS', 'ANSSILVA',
+              'DRPAULA', 'JCANDRADE', 'PBARRIONUEVO', 'TCMAGALHAES',
+              'ANATALI', 'APSILVEIRA', 'CMATSUOKA', 'JCMORAES', 'MDOMINGUES',
+              'DRIMONTEIRO', 'CADAMACENO', 'CDOMINGUES', 'JCATIAL',
+              'KETGOMES', 'SSFONSECA', 'SSMONTEIRO', 'TNEPOMUCENO', 'YREIS',
+              'ZBONFIM');
+begin
+   for r_usuario in c_usuario
+   loop
+      begin
+         insert into dbamv.usuario_multi_empresa
+            (cd_multi_empresa, cd_id_do_usuario)
+         values
+            (13, r_usuario.cd_usuario);
+         commit;
+      exception
+         when dup_val_on_index then
+            null;
+      end;
+   end loop;
+end;
+-----------------------------------------------------------------------------------------------------
+
+--INSERIR ESTOQUE PARA O SANTA MARIA.
+declare
+   cursor c_usuario is
+      select cd_usuario
+        from dbasgu.usuarios
+       where cd_usuario in
+             ('AFSENA', 'FPSILVA', 'RASOLIVEIRA', 'ALUNA', 'DBOVO',
+              'FMARAUJO', 'IBSANTOS', 'MGVIEIRA', 'PFLIMA', 'PPADILLA',
+              'TCSILVA', 'VANCESAR', 'FAFERREIRA', 'ASOLA', 'GRADIAS',
+              'JCASSAVARA', 'NSANTANA', 'NSABBAS', 'PADASILVA', 'PCROCHA',
+              'SEMLEITE', 'ALINESA', 'DJFERREIRA', 'DFERMINO', 'DOCONCEICAO',
+              'JUCRISTINA', 'LROCOSTA', 'MIOPEREIRA', 'PNOVAIS', 'PVIANA',
+              'SMARCON', 'VLEAL', 'PNOVAES', 'DBOMFIM', 'JPTORRES',
+              'LKRENKIN', 'RMGOMES', 'SSTELLE', 'TJESUS', 'ANSSILVA',
+              'DRPAULA', 'JCANDRADE', 'PBARRIONUEVO', 'TCMAGALHAES',
+              'ANATALI', 'APSILVEIRA', 'CMATSUOKA', 'JCMORAES', 'MDOMINGUES',
+              'DRIMONTEIRO', 'CADAMACENO', 'CDOMINGUES', 'JCATIAL',
+              'KETGOMES', 'SSFONSECA', 'SSMONTEIRO', 'TNEPOMUCENO', 'YREIS',
+              'ZBONFIM');
+begin
+   for r_usuario in c_usuario
+   loop
+      begin
+         insert into dbamv.usu_estoque
+            (cd_estoque, 
+             cd_id_do_usuario,
+             sn_autoriza_excl_solicitacao,     
+             sn_autoriza_alte_solicitacao,  
+             tp_usuario, 
+             sn_permite_alt_ord_compras,  
+             sn_alt_vl_unit_oc,
+             vl_perc_var_vl_unit,
+             sn_trans_quant_cota,  
+             sn_autoriza_alte_movimentacao,     
+             sn_autoriza_excl_movimentacao,    
+             dt_integra ,
+             cd_seq_integra,  
+             sn_bloq_determ_usuario)
+         values
+            (180, r_usuario.cd_usuario,'N','S','T','S','N',0,'S','S','S',NULL,NULL,'N');
+         commit;
+      exception
+         when dup_val_on_index then
+            null;
+      end;
+   end loop;
+end;

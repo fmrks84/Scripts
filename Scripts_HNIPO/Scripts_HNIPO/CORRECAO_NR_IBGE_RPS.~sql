@@ -1,0 +1,28 @@
+select * from nota_fiscal x2 where x2.cd_nota_fiscal in (733655,733654,733653,733652)
+select * from nota_fiscal x1 where x1.cd_atendimento in (8780428) --for update 
+select * from nota_fiscal where cd_multi_empresa = 2 order by 1 desc --nr_nota_fiscal_nfe = 95182
+
+SELECT x.cd_cidade FROM NOTA_FISCAL X WHERE X.Nr_Id_Nota_Fiscal IN (9394) -- 1º
+
+select y.nm_cidade,y.cd_ibge, y.nr_digito_ibge from cidade y where y.cd_cidade in (9394)--,13185)  -- 2°
+
+-- consultar o numero do ibge na internet site  : https://cidades.ibge.gov.br/brasil/sp/sao-paulo/panorama
+
+update cidade set cidade.nr_digito_ibge = 8 /*cd_ibge = '311060'*/ where cd_cidade = '9394'; -- 3° 
+commit -- 3º 
+
+select u.cd_paciente, uu.cd_cidade, u.tp_atendimento, u.cd_atendimento from atendime u
+inner join paciente uu on uu.cd_paciente = u.cd_paciente
+where u.cd_atendimento in (8667838,8632483) 
+
+--select nota_fiscal.nr_id_nota_fiscal from nota_fiscal order by nota_fiscal.nr_id_nota_fiscal desc 
+
+
+select * from 
+
+
+update  nota_fiscal x1 
+set x1.nr_nota_fiscal_nfe = '95182', 
+    x1.cd_verificacao_nfe = 'DMVFD35H',
+    x1.ds_retorno_nfe = 'Autorizado o uso da NFS-e'
+where x1.cd_atendimento in (8732714)

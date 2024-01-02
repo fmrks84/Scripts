@@ -1,0 +1,856 @@
+-- Última Atualização: 10/05/2018
+-- Por Marcos Gobi
+--1-PAGU - ITENS DE prescricao
+--1.1--Dietas sem vinculo com a prescricao
+--------------------------------------------------------------------------------
+Select '1.A Dietas: ' tipo
+      ,to_char(cd_tipo_dieta) codigo
+      ,ds_tipo_dieta nome
+      ,null setor
+      ,'1.A - Item nao existente na prescricao' critica
+      , 'Cliente: SILVIA - MV: ADRIANA' responsavel
+  from dbamv.tipo_dieta
+ where cd_tipo_dieta not in (Select cd_tipo_dieta
+                            from dbamv.tip_presc
+                           where sn_ativo = 'S'
+                             and cd_tip_esq in ('DIE', 'DET', 'DEP') --<<<<<---------------------------
+                             and cd_tipo_dieta is not null)
+                            -- and cd_tipo_dieta not in (78, 93) -- Alt. HNA - nao possui produto vinculado mesmo.
+
+
+union All
+
+--1.B--Dietas - Item de prescricao sem vinculo com origem
+Select '1.B Itens de prescricao - Dietas: ' tipo
+      ,to_char(cd_tip_presc) codigo
+      ,ds_tip_presc nome
+      ,null setor
+      ,'1.B - Item de prescricao sem vinculo com origem' critica
+      , 'Cliente: SILVIA - MV:ADRIANA' responsavel
+  from dbamv.tip_presc
+ where sn_ativo = 'S'
+       and cd_tip_esq in ('DIE', 'DET', 'DEP') --<<<<<---------------------------
+       and cd_tipo_dieta is null
+       and cd_tipo_dieta  in (select cd_tipo_dieta from dbamv.tipo_dieta
+                                 where cd_tipo_dieta in (905,957))
+     --  and cd_tip_presc not in (25495, 25499, 29068, 25467, 25505, 25504, 25497, 25498, 25496, 25460, 29020) -- Alt. HNA - nao possui vinculo mesmo
+
+union All
+
+--1.C--Medicamentos - Item de prescricao sem vinculo com origem
+Select '1.C Itens de prescricao - Medicamentos: ' tipo
+      ,to_char(cd_tip_presc) codigo
+      ,ds_tip_presc nome
+      ,null setor
+      ,'1.C - Item de prescricao sem vinculo com origem' critica
+      , 'Cliente:SILVIA - MV: ADRIANA' responsavel
+  from dbamv.tip_presc
+ where sn_ativo = 'S'
+       and cd_tip_esq in ('MDA','MDO','MDN','MDU','SOR')--<<<<<---------------------------
+       and cd_produto is null
+       and sn_fatura = 'N'
+
+union All
+
+--1.D--Item de prescricao vinculado a um medicamento movimenta nao
+Select '1.D Itens de prescricao - Medicamentos: ' tipo
+      ,to_char(cd_tip_presc) codigo
+      ,ds_tip_presc nome
+      ,null setor
+      ,'1.E - Item vinculado a um produto movimento nao' critica
+      , 'Cliente: SILVIA - MV: ADRIANA' responsavel
+  from dbamv.tip_presc
+ where cd_tip_esq in ('MDA','MDO','MDN','MDU','SOR') --<<<<<---------------------------
+            and sn_ativo = 'S'
+       and cd_produto in (select cd_produto from dbamv.produto where sn_movimentacao = 'N')
+
+union All
+
+--1.E--Medicamentos sem vinculo com a prescricao
+Select distinct '1.E Medicamentos: ' tipo
+      ,to_char(cd_produto) codigo
+      ,ds_produto nome
+      ,null setor
+      ,'1.E - Item nao existente na prescricao' critica
+      , 'Cliente:SILVIA - MV:ADRIANA' responsavel
+  from dbamv.produto
+ where cd_produto not in (Select cd_produto
+                            from dbamv.tip_presc
+                           where sn_ativo = 'S'
+                             and cd_tip_esq in ('MDA','MDO','MDN','MDU','SOR') --<<<<<---------------------------
+                             and cd_produto is  not null)
+   and sn_mestre = 'N'
+   and sn_kit = 'N'
+   and sn_medicamento = 'S'
+   and sn_movimentacao = 'S'
+   and cd_especie = 1
+  -- and cd_classe != 33  --classe de produtos de uso coletivo --<<<<<---------------------------
+   --and cd_produto not in (2025, 1636, 1642, 1639, 1645, 3435, 2323, 2102, 2089, 2094, 2095, 2096, 2090, 938, 1303) -- Alt. - nao há vinculo mesmo.
+
+union All
+
+--1.F--Itens de prescricao com nomes repetidos
+Select '1.F Item de prescricao - Medicamentos: ' tipo
+      ,null codigo
+      ,ds_tip_presc nome
+      ,null setor
+      ,'1.F - Item com nome repetido na prescricao: ' || qtd || ' Vezes'critica
+      , 'Cliente: SILVIA - MV: ADRIANA, CAROL' responsavel
+  from (Select ds_tip_presc, count(*) qtd
+          from dbamv.tip_presc where sn_ativo = 'S'
+      group by ds_tip_presc
+  having count(*) > 1) presc
+
+union All
+
+--1.G--Item de prescricao vinculado a um material movimenta nao
+Select '1.G Itens de prescricao - Materiais: ' tipo
+      ,to_char(cd_tip_presc) codigo
+      ,ds_tip_presc nome
+      ,null setor
+      ,'1.G - Item vinculado a um produto movimento nao' critica
+      , 'Cliente:SILVIA - MV:ADRIANA,CAROL' responsavel
+  from dbamv.tip_presc
+ where cd_tip_esq in ('MMD','MH') and sn_ativo = 'S' --<<<<<---------------------------
+       and cd_produto in (select cd_produto from dbamv.produto where sn_movimentacao = 'N')
+
+union All
+
+--1.H--Materiais - Item de prescricao sem vinculo com origem
+Select '1.H Itens de prescricao - Materiais: ' tipo
+      ,to_char(cd_tip_presc) codigo
+      ,ds_tip_presc nome
+      ,null setor
+      ,'1.H - Item de prescricao sem vinculo com origem' critica
+       , 'Cliente:SILVIA - MV:ADRIANA,CAROL' responsavel
+  from dbamv.tip_presc
+ where sn_ativo = 'S'
+       and cd_tip_esq in ('MMD','MH') --<<<<<---------------------------
+       and cd_produto is null
+       and sn_fatura = 'N'
+
+union All
+
+--1.I--Item de prescricao sem unidade de fracionamento
+Select '1.I Itens de prescricao - Medicamentos Sem Fracionamento:' tipo
+      ,to_char(cd_tip_presc) codigo
+      ,ds_tip_presc nome
+      ,null setor
+      ,'1.I - Item de prescricao sem fracionamento' critica
+      , 'Cliente:SILVIA - MV:ADRIANA,CAROL' responsavel
+  from dbamv.tip_presc
+ where cd_tip_esq in ('MDA','MDO','MDN','MDU','SOR')--<<<<<---------------------------
+       and sn_ativo = 'S'
+       and cd_uni_pro is null
+       and sn_fatura = 'N'
+       --and cd_tip_presc not in (29069, 28948, 25548, 25549)
+
+union All
+
+--1.J--Item de prescricao fatura SIM vinculado a produto
+Select '1.J Itens de prescricao - Faturamento: ' tipo
+      ,to_char(cd_tip_presc) codigo
+      ,ds_tip_presc nome
+      ,null setor
+      ,'1.J - Item de prescricao fatura SIM vinculado a produto' critica
+      , 'Cliente:MUNIZE - MV:ADRIANA' responsavel
+  from dbamv.tip_presc
+ where sn_ativo = 'S'
+       and cd_pro_fat is not null
+       and cd_produto is not null
+
+union all
+
+--1.L--Item de prescricao vinculado a estoque
+Select '1.L Itens de prescricao - ESTOQUE: ' tipo
+      ,to_char(cd_tip_presc) codigo
+      ,ds_tip_presc nome
+      ,null setor
+      --,cd_tip_esq
+      ,'1.L - Item de prescricao vinculado a estoque' critica
+      , 'Cliente:SILVIA,MUNIZE - MV:ADRIANA,CAROL' responsavel
+  from dbamv.tip_presc
+ where sn_ativo = 'S'
+       and cd_estoque is not null
+       and cd_tip_esq not in ('MDA','MDO','MDN','MDU','SOR','MMD','MH','DIE','DET','DEP')
+
+
+union All
+
+--1.M--Exames de laboratorio - Item de prescricao sem vinculo com origem
+Select '1.M Itens de prescricao - Exames Lab: ' tipo
+      ,to_char(cd_tip_presc) codigo
+      ,ds_tip_presc nome
+      ,null setor
+      ,'1.M - Item de prescricao sem vinculo com origem' critica
+      , 'Cliente: JUNIOR - MV:ADRIANA,CAROL' responsavel
+  from dbamv.tip_presc
+ where sn_ativo = 'S'
+       and cd_tip_esq in ('EXL') --<<<<<---------------------------
+       and cd_exa_lab is null
+
+union all
+
+--1.N--Exames de laboratorio sem vinculo com a prescricao
+
+Select '1.N laboratorio: ' tipo
+      ,to_char(cd_exa_lab) codigo
+      ,nm_exa_lab nome
+      ,null setor
+      ,'1.N - Item nao existente na prescricao' critica
+      , 'Cliente:JUNIOR - MV:ADRIANA,CAROL' responsavel
+  from dbamv.exa_lab
+ where cd_exa_lab not in (Select cd_exa_lab
+                            from dbamv.tip_presc
+                           where sn_ativo = 'S'
+                             and cd_tip_esq = 'EXL' --<<<<<---------------------------
+                             and cd_exa_lab is not null)
+       and sn_ativo = 'S'
+
+
+union All
+
+--1.O--Item de prescricao vinculado a um exame de laboratorio inativo
+Select distinct '1.0 Itens de prescricao - Exames Lab: ' tipo
+      ,to_char(cd_tip_presc) codigo
+      ,ds_tip_presc nome
+      ,null setor
+      ,'1.O - Item de prescricao ativo vinculado a exame inativo' critica
+      , 'Cliente: Juliana - MV: Rodrigo' responsavel
+  from dbamv.tip_presc, dbamv.exa_lab
+ where tip_presc.sn_ativo = 'S'
+       and cd_tip_esq in ('EXL') --<<<<<---------------------------
+       and tip_presc.cd_exa_lab in (select cd_exa_lab from dbamv.exa_lab where sn_ativo = 'N')
+
+union All
+
+--1.P--Item de prescricao vinculado a um exame de imagem inativo
+Select '1.P Itens de prescricao - Exames Imagem: ' tipo
+      ,to_char(cd_tip_presc) codigo
+      ,ds_tip_presc nome
+      ,null setor
+      ,'1.P - Item de prescricao ativo vinculado a exame inativo' critica
+      , 'Cliente:JUNIOR - MV:ADRIANA,CAROL' responsavel
+  from dbamv.tip_presc
+ where sn_ativo = 'S'
+       and cd_tip_esq in ('EXI') --<<<<<---------------------------
+       and cd_exa_rx in (select cd_exa_rx from dbamv.exa_rx where sn_ativo = 'N')
+
+union All
+
+--1.Q--Exames Imagem - Item de prescricao sem vinculo com origem
+Select '1.Q Itens de prescricao - Exames Imagem: ' tipo
+      ,to_char(cd_tip_presc) codigo
+      ,ds_tip_presc nome
+      ,null setor
+      ,'1.Q - Item de prescricao sem vinculo com origem' critica
+      , 'Cliente:JUNIOR - MV:CAROL' responsavel
+  from dbamv.tip_presc
+ where sn_ativo = 'S'
+       and cd_tip_esq in ('EXI') --<<<<<---------------------------
+       and cd_exa_rx is null
+
+union All
+
+--1.R--Exames de imagem sem vinculo com a prescricao
+Select '1.R Imagem: ' tipo
+      ,to_char(cd_exa_rx) codigo
+      ,ds_exa_rx nome
+      ,null setor
+      ,'1.R - Item nao existente na prescricao' critica
+      , 'Cliente:JUNIOR - MV:ADRIANA,CAROL' responsavel
+  from dbamv.exa_rx
+ where cd_exa_rx not in (Select cd_exa_rx
+                            from dbamv.tip_presc
+                           where sn_ativo = 'S'
+                             and cd_tip_esq = 'EXI' --<<<<<---------------------------
+                             and cd_exa_rx is not null)
+ and sn_ativo = 'S'
+
+union All
+
+--2-MGES - ESTOQUES
+--2.A--Medicamentos sem relacionamento com o faturamento
+Select '2.A Produtos de Estoque - Medicamentos: ' tipo
+      ,to_char(cd_produto) codigo
+      ,ds_produto nome
+      ,null setor
+      ,'2.A - Item sem relacionamento com o Faturamento' critica
+      , 'Cliente:VERA - MV:LEANDRO' responsavel
+  from dbamv.produto
+ where cd_pro_fat is null
+   and sn_mestre = 'N'
+   and cd_especie in (1)
+  and sn_movimentacao = 'S'
+--   and sn_kit = 'N' --<<<<<---------------------------
+--   and cd_classe != 33 --<<<<<---------------------------
+     and cd_pro_fat != '99999999' and cd_pro_fat != '88888888' --<<<<<---------------------------
+
+Union all
+
+--2.B--Medicamentos e materiais sem fator de divisão do faturamento
+Select '2.B Produtos de Estoque - Medicamentos: DIVISOR' tipo
+      ,to_char(cd_produto) codigo
+      ,ds_produto nome
+      ,null setor
+      ,'2.B - Item sem fator de divisor do faturamento' critica
+      , 'Cliente:SILVIA - MV:CAROL' responsavel
+  from dbamv.produto
+ where nvl(vl_fator_pro_fat, 0) = 0
+   and cd_pro_fat is not null
+   and sn_mestre = 'N'
+   and cd_especie in (1,2,16) --<<<<<---------------------------
+   and sn_movimentacao = 'S'
+--   and sn_kit = 'N' --<<<<<---------------------------
+
+Union all
+
+--2.C--Produtos de estoque relacionados a procedimentos sem valor
+Select '2.C Produtos de Estoque - Medicamentos: ' tipo
+      ,to_char(cd_produto) codigo
+      ,ds_produto nome
+      ,null setor
+      ,'2.C - Item relacionado a procedimento mas sem valores cadastrados' critica
+      , 'Cliente:VERA - MV:LEANDRO' responsavel
+  from dbamv.produto
+ where cd_pro_fat not in (Select cd_pro_fat
+                            from dbamv.val_pro v
+                           where cd_pro_fat = v.cd_pro_fat)
+   and cd_pro_fat is not null
+   and sn_mestre = 'N'
+   and cd_especie in (1,2,16) --<<<<<---------------------------
+   and sn_movimentacao = 'S'
+   and cd_pro_fat != '99999999' and cd_pro_fat != '88888888' --<<<<<---------------------------
+   and sn_kit = 'N'
+
+Union all
+
+--2.D--Estoque sem configuração para solicitação automática da prescricao
+ Select '2.D Estoques: SOLICITAÇÃO ' tipo
+      ,to_char(cd_estoque) codigo
+      ,ds_estoque
+      ,null setor
+      ,'2.D - Estoque sem configuração para solicitação automática da prescricao' critica
+      , 'CAROL' responsavel
+  from dbamv.estoque
+ where cd_estoque not in (1,2,3,5,6,7,8,9,10,12,13,14,15,16,17,18,19,20,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,42,43,44,45,46,47,48,49,50,51,52)
+and cd_estoque not in (Select cd_estoque
+                            from dbamv.config_estoque v
+                            where cd_estoque = v.cd_estoque)
+
+
+Union all
+
+--2.E--Estoques sem configuração de quais espécies poderão armazenar
+Select '2.E Estoques: ESPECIES' tipo
+      ,to_char(cd_estoque) codigo
+      ,ds_estoque
+      ,null setor
+      ,'2.E - Estoques sem configuração de quais espécies poderão armazenar' critica
+      , 'Cliente:SILVIA - MV:CAROL' responsavel
+  from dbamv.estoque
+ where cd_estoque not in (Select cd_estoque
+                            from dbamv.esp_est v
+                            where cd_estoque = v.cd_estoque)
+
+Union all
+
+--2.F--Espécies sem conta de custo relacionadas
+Select '2.F Espécies dos Produtos: ' tipo
+      ,to_char(cd_especie) codigo
+      ,ds_especie
+      ,null setor
+      ,'2.F - Espécies sem conta de custo relacionadas' critica
+      , 'Cliente:MARIA - MV:ANESIO' responsavel
+  from dbamv.especie
+ where cd_item_res is null
+
+union All
+
+--2.H - Flag medicamento SIM mas fora da especie 1
+Select distinct '2.H Medicamentos: FLAG ' tipo
+      ,to_char(cd_produto) codigo
+      ,ds_produto nome
+      ,null setor
+      ,'2.H - Flag medicamento SIM mas fora da especie 1 (medicamentos)' critica
+      , 'Cliente:SILVIA - MV:CAROL' responsavel
+  from dbamv.produto
+ where
+   --sn_mestre = 'N'
+   sn_kit = 'N'
+   and sn_medicamento = 'S'
+   and sn_movimentacao = 'S'
+   and cd_especie not in (1)
+
+union All
+
+--2.I--Materiais sem relacionamento com o faturamento
+Select '2.I Produtos de Estoque - Materiais e OPME: ' tipo
+      ,to_char(cd_produto) codigo
+      ,ds_produto nome
+      ,null setor
+      ,'2.I - Item sem relacionamento com o Faturamento' critica
+      , 'Cliente:NADIA - MV:CAROL' responsavel
+  from dbamv.produto
+ where cd_pro_fat is null
+   and sn_mestre = 'N'
+   and cd_especie in (2,16)--<<<<<---------------------------
+   and sn_movimentacao = 'S'
+   and sn_kit = 'N'
+-- and cd_classe != 33
+   and cd_pro_fat != '88888888'
+
+union All
+
+--2.J--Produtos de estoque relacionados a procedimentos sem valor
+Select '2.J Produtos de Estoque - Materiais: ' tipo
+      ,to_char(cd_produto) codigo
+      ,ds_produto nome
+      ,null setor
+      ,'2.J - Item relacionado a procedimento mas sem valores cadastrados' critica
+      , 'Cliente:NADIA - MV:CAROL' responsavel
+  from dbamv.produto
+ where cd_pro_fat not in (Select cd_pro_fat
+                            from dbamv.val_pro v
+                           where cd_pro_fat = v.cd_pro_fat)
+   and cd_pro_fat is not null
+   and sn_mestre = 'N'
+   and cd_especie in (2,16)
+   and sn_kit = 'N'
+   and sn_movimentacao = 'S'
+   and cd_pro_fat != '99999999' and cd_pro_fat != '88888888'
+
+union All
+
+--3-FATURAMENTO
+
+--3.A--Procedimento de faturamento repetidos no estoque
+Select '3.A Produtos de Estoque: ' tipo
+      ,to_char(cd_produto) codigo
+      ,ds_produto nome
+      ,null setor
+      ,'3.A - Procedimento de faturamento repetidos no estoque' critica
+      , 'Cliente:NADIA - MV:CAROL' responsavel
+  from dbamv.produto
+having count (cd_pro_fat) >1
+group by cd_produto, ds_produto
+
+union All
+
+--3.B--Exames de Imagem sem relacionamento com procedimento
+Select '3.B Exames de Imagem - Faturamento: ' tipo
+      ,to_char(cd_exa_rx) codigo
+      ,ds_exa_rx nome
+      ,null setor
+      ,'3.B--Exames de Imagem sem relacionamento com procedimento' critica
+      , 'Cliente:JUNIOR - MV:CAROL,ADRIANA' responsavel
+  from dbamv.exa_rx
+ where exa_rx_cd_pro_fat is null
+ and sn_ativo = 'S'
+
+union All
+
+--4-PSSD - EXAMES LABORATÓRIAIS
+
+--4.A--Exame de laboratorio sem material vinculado
+/*
+Select '4.A Exames de laboratorio: MATERIAL ' tipo
+      ,to_char(cd_exa_lab) codigo
+      ,nm_exa_lab nome
+      ,null setor
+      ,'4.A - Exame sem material vinculado' critica
+      , 'Cliente:JUNIOR - MV:CAROL,ADRIANA' responsavel
+  from dbamv.exa_lab
+ where exa_lab.cd_exa_lab not in (select cd_exa_lab from DBAMV.EXA_LAB_MATERIAL)
+       and sn_ativo = 'S'
+
+union All
+*/
+--4.B--Exame de laboratorio sem bancada vinculada
+
+Select '4.B Exames de laboratorio: BANCADA' tipo
+      ,to_char(exa_lab.cd_exa_lab) codigo
+      ,exa_lab.nm_exa_lab nome
+      ,null setor
+      ,'4.B - Exame sem bancada vinculada' critica
+      , 'Cliente: Juliana - MV:ADRIANA, CAROL' responsavel
+  from dbamv.exa_lab, dbamv.exa_lab_set_exa
+ where exa_lab.cd_exa_lab = exa_lab_set_exa.cd_exa_lab
+          and exa_lab.sn_ativo = 'S'
+          and exa_lab_set_exa.cd_bancada is null
+
+union All
+
+--4.C--Exames de laboratorio relacionados e sem valores cadastrados
+Select '4.C Exames de laboratorio - Faturamento: ' tipo
+      ,to_char(cd_exa_lab) codigo
+      ,nm_exa_lab nome
+      ,null setor
+      ,'4.C - Exames de laboratorio relacionados e sem valores cadastrados' critica
+      , 'Cliente:NADIA - MV:CAROL,ADRIANA' responsavel
+  from dbamv.exa_lab
+ where cd_pro_fat not in (Select cd_pro_fat
+                            from dbamv.val_pro v
+                           where cd_pro_fat = v.cd_pro_fat)
+ and sn_ativo = 'S'
+
+union All
+
+--4.D--Exames de laboratorio sem relacionamento com procedimento
+Select '4.D Exames de laboratorio - Faturamento: ' tipo
+      ,to_char(cd_exa_lab) codigo
+      ,nm_exa_lab nome
+      ,null setor
+      ,'4.D--Exames de laboratorio sem relacionamento com procedimento' critica
+      , 'Cliente:NADIA - MV: CAROL,ADRIANA' responsavel
+  from dbamv.exa_lab
+ where cd_pro_fat is null
+ and sn_ativo = 'S'
+
+Union all
+
+--5-PSDI - EXAMES DE IMAGEM
+
+--5.A--Exame de imagem sem setor vinculado
+Select '5.A Exames de Imagem: ' tipo
+      ,to_char(cd_exa_rx) codigo
+      ,ds_exa_rx nome
+      ,null setor
+      ,'5.A - Exame sem setor vinculado' critica
+      , 'Cliente:JUNIOR - MV:CAROL,ADRIANA' responsavel
+  from dbamv.exa_rx
+ where cd_Exa_rx not in (select cd_Exa_Rx from dbamv.exa_set) and sn_Ativo = 'S'
+
+union All
+
+--5.B--Exames de Imagem relacionados e sem valores cadastrados
+Select '5.B Exames de Imagem - Faturamento: ' tipo
+      ,to_char(cd_exa_rx) codigo
+      ,ds_exa_rx nome
+      ,null setor
+      ,'5.B - Exames de Imagem relacionados e sem valores cadastrados' critica
+      , 'Cliente:JUNIOR - MV:CAROL,ADRIANA' responsavel
+  from dbamv.exa_rx
+ where exa_rx_cd_pro_fat not in (Select cd_pro_fat
+                            from dbamv.val_pro v
+                           where cd_pro_fat = v.cd_pro_fat)
+ and sn_ativo = 'S'
+
+union All
+
+--5.C--Exame de imagem sem setor vinculado
+Select '5.C Exames de Imagem: ' tipo
+      ,to_char(cd_exa_rx) codigo
+      ,ds_exa_rx nome
+      ,null setor
+      ,'5.C - Exame sem setor vinculado' critica
+      , 'Cliente: Camila,Mariana - MV: Rodrigo' responsavel
+  from dbamv.exa_rx
+ where cd_Exa_rx not in (select cd_Exa_Rx from dbamv.exa_set) and sn_Ativo = 'S'
+union all
+--5.D--Faturamento
+--Setores nao configurados para cair na conta
+Select distinct '5.D Faturamento: Grupo de faturamento sem setor' tipo
+       ,to_char(gfa.cd_gru_fat) codigo
+       ,gfa.ds_gru_fat nome
+       ,null setor
+       ,'5.D - Grupo de faturamento nao configurado para receber lançamentos' critica
+       ,'Cliente:JUNIOR - MV:LEANDRO' responsavel
+       from dbamv.configu_importacao_gru_fat gf, dbamv.gru_fat gfa
+       where gf.cd_gru_fat (+) = gfa.cd_gru_fat
+       and gfa.cd_gru_fat not in (1,6,3,9,7,8,2)
+
+       and gfa.cd_gru_fat not in (select cd_gru_fat from dbamv.configu_importacao_gru_fat)
+union All
+
+--6-FSCC CIRURGIAS
+--6.A - Cirurgias sem vinculo com especialidade
+Select '6.A Cirurgia: ESPECIALIDADE' tipo
+      ,to_char(cd_cirurgia) codigo
+      ,ds_cirurgia nome
+      ,null setor
+      ,'6.A - Cirurgia sem vinculo com a especialidade' critica
+      , 'Cliente:MUNIZE - MV:ADRIANA' responsavel
+  from dbamv.cirurgia
+ where sn_ativo = 'S'
+       and cd_cirurgia not in (select distinct cd_cirurgia from dbamv.especialid_cirurgia)
+
+union All
+
+--6.B - Cirurgias sem vinculo com via de acesso
+Select '6.B Cirurgia: VIA DE ACESSO' tipo
+      ,to_char(cd_cirurgia) codigo
+      ,ds_cirurgia nome
+      ,null setor
+      ,'6.B - Cirurgias sem vinculo com via de acesso' critica
+      , 'Cliente:MUNIZE - MV:ADRIANA' responsavel
+  from dbamv.cirurgia
+ where sn_ativo = 'S'
+  and cd_via_de_acesso is null
+
+union All
+
+--6.C - Cirurgias sem vinculo com tempo padrao
+Select '6.C Cirurgia: TEMPO padrao' tipo
+      ,to_char(cd_cirurgia) codigo
+      ,ds_cirurgia nome
+      ,null setor
+      ,'6.C - Cirurgias sem vinculo com tempo padrao' critica
+      , 'Cliente:MUNIZE - MV:ADRIANA' responsavel
+  from dbamv.cirurgia
+ where sn_ativo = 'S'
+       and nr_horas_padrao is null
+
+union All
+
+--7-HEMOTERAPIA
+
+--7.A--Hemoderivado - Item de prescricao sem vinculo com origem
+Select '7.A Itens de prescricao - Hemoderivado: ' tipo
+      ,to_char(cd_tip_presc) codigo
+      ,ds_tip_presc nome
+      ,null setor
+      ,'7.A - Item de prescricao sem vinculo com origem' critica
+      , 'Cliente:MUNIZE - MV:ADRIANA' responsavel
+  from dbamv.tip_presc
+ where sn_ativo = 'S'
+       and cd_tip_esq in ('HEM')--<<<<<---------------------------
+       and cd_sangue_derivados is null
+
+union All
+
+--8-CONTÁBEIS
+--8.A-Fornecedores sem conta contábil vinculada
+Select '8.A Fornecedores: ' tipo
+      ,to_char(cd_fornecedor) codigo
+      ,nm_fornecedor nome
+      ,null setor
+      ,'8.A - Fornecedores sem conta contábil vinculada' critica
+      , 'Cliente:MARIA - MV:ANESIO, TALITA' responsavel
+  from dbamv.fornecedor
+ where cd_fornecedor not in (select distinct cd_fornecedor from dbamv.forn_conta)
+
+union All
+
+--9-VINCULOS EM GERAL
+--9.A--Usuarios nao relacionados com empresa
+Select '9.A Usuarios:  EMPRESA' tipo
+      ,cd_usuario codigo
+      ,nm_usuario nome
+      ,usuarios.ds_observacao setor
+      ,'9.A - Usuarios nao relacionados com empresa' critica
+      , 'Cliente:JUNIOR - MV:ANESIO,TALITA' responsavel
+  from dbasgu.usuarios
+ where cd_usuario not in (Select cd_id_usuario
+                            from dbamv.usuario_multi_empresa v
+                           where cd_usuario = v.cd_id_usuario)
+   and sn_ativo = 'S'
+
+Union all
+
+--9.B--Prestador sem vinculo com USUARIO
+Select distinct '9.B Prestador: USUARIO' tipo
+      ,to_char(a.cd_prestador) codigo
+      ,a.nm_prestador nome
+      ,c.nm_tip_presta setor
+      ,'9.B - Prestador sem vinculo com USUARIO' critica
+       , 'Cliente:VERA - MV:CAROL' responsavel
+  from dbasgu.usuarios b, dbamv.prestador a
+  inner join DBAMV.TIP_PRESTA c on c.cd_tip_presta = a.cd_tip_presta
+ where a.cd_prestador not in (select distinct cd_prestador from dbasgu.usuarios where cd_prestador is not null)
+       and a.tp_situacao = 'A'
+       and a.cd_prestador not in (1256,1260,1261,1271,1263,1262,1258,1278,1259,1266,1265,1257,1255,1264,1470) --código do tipo de prestador PESSOA JURÍDICA--<<<<<---------------------------
+     --and a.cd_prestador not in (440) -- Alt. Correção.
+
+union All
+
+--9.C--Usuarios nao relacionados com origem
+Select '9.C Usuarios: ORIGEM' tipo
+      ,cd_usuario codigo
+      ,nm_usuario nome
+      ,usuarios.ds_observacao setor
+      ,'9.C - USUARIO nao relacionado com origem' critica
+       , 'Cliente:JUNIOR - MV:ALBERTO' responsavel
+  from dbasgu.usuarios
+ where cd_usuario not in (Select cd_usuario
+                            from dbamv.usu_origem v
+                           where cd_usuario = v.cd_usuario)
+   and sn_ativo = 'S'
+    -- Alt. - Correção.
+
+union All
+
+--9.D--USUARIO nao relacionado com papel
+Select distinct '9.D Usuarios: PAPEL' tipo
+      ,usuarios.cd_usuario codigo
+      ,usuarios.nm_usuario nome
+      ,usuarios.ds_observacao setor
+      ,'9.D - USUARIO nao relacionado com papel' critica
+       , 'Cliente:JUNIOR - MV:ALBERTO' responsavel
+  from dbasgu.usuarios, dbasgu.papel_usuarios
+ where usuarios.cd_usuario not in (Select cd_usuario
+                            from dbasgu.papel_usuarios v
+                           where cd_usuario = v.cd_usuario)
+   and sn_ativo = 'S'
+   and usuarios.cd_usuario not in ('DBAPS','DBASGU','MVPADRAO')
+union All
+
+--9.E-- Prestador sem vinculo com o tipo OUTROS
+Select '9.E Prestadores: VINCULO' tipo
+      ,to_char(cd_prestador) codigo
+      ,nm_prestador nome
+      ,null setor
+      ,'9.E - Prestador MÉDICO sem vinculo com o tipo OUTROS' critica
+       , 'Cliente:VALERIA - MV:ALBERTO' responsavel
+  from dbamv.prestador
+ where sn_outros = 'N'
+       and CD_TIP_PRESTA in (8)
+        --<<<<<---------------------------
+
+union All
+
+--9.F--Prestadores que nao possuem especialidade vinculada
+Select distinct'9.F Prestadores: ESPECIALIDADE ' tipo
+      ,to_char(a.cd_prestador) codigo
+      ,a.nm_prestador nome
+      ,null setor
+      ,'9.F - Prestadores que nao possuem especialidade vinculada' critica
+       , 'Cliente:VALERIA - MV:ALBERTO' responsavel
+  from dbamv.prestador a, dbamv.ESP_MED b, dbamv.TIP_PRESTA c
+ where a.cd_prestador not in (select cd_prestador from dbamv.esp_med)
+       and a.cd_tip_presta = c.cd_tip_presta
+       and a.tp_situacao = 'A'
+       and a.cd_tip_presta not in (67,31,38,16,13) --código do tipo de prestador PESSOA JURÍDICA
+ union all
+--9.G--Setor sem configuração de horario de prescricao
+select distinct '9.G Setor sem configuração de horário prescricao Médica' tipo
+     ,to_char(ps.cd_setor) codigo
+     ,sr.ds_unid_int nome
+     ,null setor
+     ,'9.G - Setor sem configuração de horário para prescricao médica' critica
+     ,'Cliente:MUNIZE - MV:ADRIANA' responsavel
+ from dbamv.config_pagu_setor ps, dbamv.unid_int sr
+    where ps.cd_setor = sr.cd_setor
+    and sr.cd_setor in (select setor.cd_setor from dbamv.setor, dbamv.unid_int
+                                     where setor.cd_setor = unid_int.cd_setor)
+       and ps.hr_presc_med is null
+       --and ps.cd_setor not in (184, 185)
+ union all
+--9.H--Setor sem configuração de horario de prescricao
+select distinct '9.H Setor sem configuração de horário prescricao Enfermagem' tipo
+     ,to_char(ps.cd_setor) codigo
+     ,sr.ds_unid_int nome
+     ,null setor
+     ,'9.G - Setor sem configuração de horário para prescricao enfermagem' critica
+     ,'Cliente:MUNIZE - MV:ADRIANA' responsavel
+ from dbamv.config_pagu_setor ps, dbamv.unid_int sr
+    where ps.cd_setor = sr.cd_setor
+    and sr.cd_setor in (select setor.cd_setor from dbamv.setor, dbamv.unid_int
+                                     where setor.cd_setor = unid_int.cd_setor)
+       and ps.hr_presc_enf is null
+       and ps.cd_setor not in (170,184,185)
+union all
+--9.I--Turno de dispensação
+select distinct '9.I Turno de dispensação' tipo
+       ,to_char(ser.cd_setor) codigo
+       ,ser.nm_setor setor
+       ,null setor
+       ,'9.I - Setor nao configurado no turno' critica
+       ,'Cliente:SILVIA - MV:CAROL' responsavel
+        from  dbamv.setor ser
+       where ser.cd_setor in (select setor.cd_setor from dbamv.setor, dbamv.unid_int
+                                     where setor.cd_setor = unid_int.cd_setor)
+                                     and ser.cd_setor not in (select cd_setor from dbamv.turno_setor)
+                                     and ser.cd_setor not in (170,210,213,214,184,185,223,55)
+union all
+--9.J--Horário de balanço hídrico
+select distinct '9.J Setor sem configuração de horário balanço hidrico' tipo
+     ,to_char(ps.cd_setor) codigo
+     ,sr.ds_unid_int nome
+     ,null setor
+     ,'9.J - Setor sem configuração de horário para balanço hidrico' critica
+     ,'Cliente:MUNIZE - MV:ADRIANA' responsavel
+ from dbamv.config_pagu_setor ps, dbamv.unid_int sr
+    where ps.cd_setor = sr.cd_setor
+    and sr.cd_setor in (select setor.cd_setor from dbamv.setor, dbamv.unid_int
+                                     where setor.cd_setor = unid_int.cd_setor)
+       and ps.hr_inicio_balanco_hidrico_pep is null
+union all
+--9.k--USUARIO sem cpf no cadastro de usuarios
+select distinct '9.K Assinatura digital' tipo
+     ,to_char(sgu.cd_usuario) codigo
+     ,sgu.nm_usuario nome
+     ,null setor
+     ,'9.K - Usuario sem CPF no cadastro de usuario'critica
+     ,'Cliente:JUNIOR - MV:ALBERTO' responsavel
+     from dbasgu.usuarios sgu
+     where sgu.cpf is null
+     and sgu.sn_ativo = 'S'
+     and sgu.cd_usuario not in ('DBAPS','DBASGU','USERMV','MVLEITURA','MVPADRAO','TESTE')
+
+
+
+ union all
+--9.L--Leito sem copa
+select distinct '9.L Leito sem copa' tipo
+      ,to_char(lei.cd_leito) codigo
+      ,lei.ds_leito nome
+      ,null setor
+      ,'9.L - Leito sem copa' critica
+      ,'Cliente:NUTRICIONISTAS - MV:CAROL' responsavel
+      from dbamv.leito lei
+      where lei.cd_copa is null
+ union all
+--9.M--Origem sem copa
+select distinct '9.M Origem sem copa' tipo
+      ,to_char(ori.cd_ori_ate) codigo
+      ,ori.ds_ori_ate nome
+      ,null setor
+      ,'9.M - Leito sem copa' critica
+      ,'Cliente:NUTRICIONISTAS- MV:CAROL' responsavel
+      from dbamv.ori_ate ori
+      where ori.cd_copa is null
+      UNION ALL
+------------------------------------------------------
+---10.A---Usuarios que nao possuem vinculo com o setor da agenda
+select distinct '10.A Agenda: Usuarios sem setor' tipo
+,to_char(u.cd_usuario) codigo
+,u.nm_usuario nome
+,NULL SETOR
+,'10.A - Usuarios que nao possuem acesso a setor da agenda' critica
+,'Cliente:COORD.RECEPÇÃO - MV:ADRIANA' responsavel
+
+from dbasgu.usuarios u
+   where u.cd_usuario not in (select nm_usuario from dbamv.usuario_setor)
+
+union all
+----10.B----Usuarios que nao possuem flag de cadastra
+select distinct
+'10.B Usuario: Usuario sem acesso a cadastrar paciente' tipo
+,to_char(u.cd_usuario) codigo
+,u.nm_usuario nome
+,NULL SETOR
+,'10.B - Usuarios que nao possuem acesso a cadastrar paciente' critica
+,'Cliente:JUNIOR - MV:ALBERTO' responsavel
+
+from dbasgu.usuarios u, dbasgu.papel_usuarios pu
+where u.cd_usuario = pu.cd_usuario
+and u.sn_cadastra_paciente = 'N'
+and pu.cd_papel in (120)
+
+union all
+
+select distinct
+'10.C Usuario: Usuario sem acesso a alterar cadastro paciente' tipo
+,to_char(u.cd_usuario) codigo
+,u.nm_usuario nome
+,'10.C - Usuarios que nao possuem acesso a alterar cadastro paciente' critica
+,NULL SETOR
+,'Cliente:JUNIOR - MV:ALBERTO' responsavel
+from dbasgu.usuarios u, dbasgu.papel_usuarios pu
+where u.cd_usuario = pu.cd_usuario
+and u.sn_altera_cadastro_paciente = 'N'
+and pu.cd_papel in (120)
+
+
+order by  5,4,3

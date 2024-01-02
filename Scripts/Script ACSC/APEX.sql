@@ -1,0 +1,117 @@
+
+select cd_guia , cd_atendimento , cd_aviso_cirurgia  from guia where cd_aviso_cirurgia is not null and tp_guia = 'O' 
+/*and cd_atendimento is not null */ and cd_convenio = 7 and dt_autorizacao is null  ORDER BY 1 DESC
+
+274017
+09066424
+
+
+select cir.cd_cirurgia,
+       gc.cd_grupo_cirurgia,
+       sgc.cd_sub_grupo_cirurgia
+        from sub_grupo_cirurgia sgc
+inner join grupo_cirurgia gc on gc.cd_grupo_cirurgia = sgc.cd_grupo_cirurgia
+inner join cirurgia cir on cir.cd_sub_grupo_cirurgia = sgc.cd_sub_grupo_cirurgia
+inner join cirurgia_Aviso  avcir on avcir.cd_cirurgia = cir.cd_cirurgia
+where avcir.cd_aviso_cirurgia  in (288593,288586)
+
+select * from it_guia h where h.cd_guia in (3981556)
+
+select * from pro_Fat where cd_pro_Fat in ('09009511')--70857580','70013489')
+select * from pro_Fat where cd_pro_Fat = '09036424'
+select * from gru_pro where cd_gru_pro in (89,9)
+select * from gru_fat where cd_Gru_fat = 9 
+select * from produto pr where pr.cd_produto in (1177,3633,9743)--pr.cd_pro_fat = 00258304
+4026414 atend
+288142  aviso
+
+select * from fornecedor order by 2 
+select * from laborator order by 2 
+
+
+select * from aviso_cirurgia cir where cir.cd_aviso_cirurgia = 288676
+select * from cirurgia_aviso cirr where cirr.cd_aviso_cirurgia = 288576
+select * from cirurgia where cd_cirurgia = 3250
+select * from atendime where cd_Atendimento = 4406124
+
+select * from pro_fat where ds_pro_Fat LIKE '%ENXERTO%GRANULADO%'
+cd_pro_Fat in (select cd_pro_FAt from produto where cd_produto IN (3533,9511))
+
+SELECT * FROM IMP_SIMPRO SP WHERE SP.CD_SIMPRO = '0000070803'
+
+--- Colocar na situacao do item da guia o defaut solicitado 
+--- Verificar com viviane sobre a TRG MVINTEGRA.TRG_IMVW_AUT_OPME 
+---
+
+select * from val_pro vp 
+
+
+select
+b.cd_tab_fat,
+b.cd_pro_fat,
+c.ds_pro_fat,
+b.dt_vigencia,
+b.vl_honorario,
+b.vl_operacional,
+b.vl_total,
+a.cd_regra
+from 
+itregra a
+inner join val_pro b on b.cd_tab_fat = a.cd_tab_fat
+inner join pro_Fat c on c.cd_pro_fat = b.cd_pro_fat and c.cd_gru_pro = a.cd_gru_pro
+where a.cd_regra = 66
+and b.dt_vigencia = '01/12/2022'
+order by c.ds_pro_fat
+
+;
+
+select cd_produto, ds_produto from produto where cd_pro_fat in (70763666,70908206,70222991)
+select * from cirurgia_Aviso where cd_aviso_cirurgia in (288609)
+select * from cirurgia where cd_cirurgia in (662,2622)
+select * from aviso_cirurgia where cd_aviso_cirurgia = 288609
+
+select * From empresa_produto ep where ep.cd_produto in (9743,18683)
+
+
+select cir.cd_cirurgia,
+       gc.cd_grupo_cirurgia,
+       sgc.cd_sub_grupo_cirurgia
+        from sub_grupo_cirurgia sgc
+inner join grupo_cirurgia gc on gc.cd_grupo_cirurgia = sgc.cd_grupo_cirurgia
+inner join cirurgia cir on cir.cd_sub_grupo_cirurgia = sgc.cd_sub_grupo_cirurgia
+inner join cirurgia_Aviso  avcir on avcir.cd_cirurgia = cir.cd_cirurgia
+where avcir.cd_aviso_cirurgia  in (288593,288586)
+--sgc.cd_sub_grupo_cirurgia = 38
+
+select * from faixa_guia_convenio xv where xv.cd_convenio = 7 
+select * from Item_Faixa_Guia_Convenio in 
+
+
+
+-------- 
+select * from guia x where x.Cd_Aviso_Cirurgia = 333896
+and x.cd_guia in (select * from it_guia ix where ix.cd_guia = 3991720)
+
+select * from it_guia ix where ix.cd_guia = 3991720
+
+
+select * from val_opme_it_guia x where x.cd_guia = 3991700
+select * from all_tab_columns y where y.column_name  like '%SN_APROVADO_OPERADORA%'
+
+
+select * from aviso_cirurgia cir where cir.cd_Aviso -- 288552
+select * from cirurgia_aviso cirr where cirr.cd_aviso_cirurgia = 288552
+select * from aviso_cirurgia xi where xi.cd_aviso_cirurgia = 288552
+select prc.cd_ati_med from prestador_aviso prc where prc.cd_aviso_cirurgia = 
+
+
+---- produtos para cotar 
+select pd.cd_produto ,  pf.cd_pro_fat, pf.ds_pro_fat, gp.cd_gru_pro , pf.sn_opme
+from pro_fat pf 
+inner join gru_pro gp on gp.cd_gru_pro = pf.cd_gru_pro
+inner join produto pd on pd.cd_pro_fat = pf.cd_pro_fat
+where pf.cd_gru_pro = 89 
+or gp.tp_gru_pro = 'OP'
+and pf.sn_opme = 'S'
+and pf.sn_ativo = 'S'
+

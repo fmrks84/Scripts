@@ -1,0 +1,8 @@
+
+
+GRANT SELECT ON dbamv.vdic_green_avisos_pendentes TO dbaps;
+GRANT SELECT ON dbamv.vdic_green_avisos_pendentes TO dbasgu;
+GRANT DELETE,INSERT,SELECT,UPDATE ON dbamv.vdic_green_avisos_pendentes TO mv2000;
+GRANT SELECT ON dbamv.vdic_green_avisos_pendentes TO mvintegra;
+   
+      

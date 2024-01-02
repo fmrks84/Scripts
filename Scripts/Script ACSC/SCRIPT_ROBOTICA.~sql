@@ -1,0 +1,16 @@
+select * from pacote pc where pc.cd_pro_fat_pacote = 10001662
+select * from pro_Fat where cd_pro_fat = '02037628'
+
+select xp.cd_tab_fat,
+       xp.cd_pro_fat,
+       xp.dt_vigencia,
+       xp.vl_total
+        from val_pro xp where xp.cd_pro_fat in(
+select cd_pro_fat from pro_Fat where cd_pro_fat in
+ (select pc.cd_pro_fat from pacote pc where pc.cd_pro_fat_pacote = 10001662))
+ and trunc(dt_vigencia) = (select max(xx.dt_vigencia) from val_pro xx where xx.cd_pro_fat = xp.cd_pro_fat and xx.cd_tab_fat = xp.cd_tab_fat)
+ 
+ 
+ select * from val_pro where cd_pro_fat = '10001662'
+
+-- 4553553 atend dev1

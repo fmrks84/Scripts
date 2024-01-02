@@ -1,0 +1,12 @@
+PROMPT CREATE OR REPLACE FUNCTION dbamv.fnc_ffcv_nf_tributo_rep
+CREATE OR REPLACE FUNCTION dbamv.fnc_ffcv_nf_tributo_rep( p1 IN  Number, p2 IN varchar2, p3 IN VARCHAR2, p4 IN NUMBER ) RETURN varchar2 IS
+      ret varchar2(2000);
+
+BEGIN
+  ret:= dbamv.fnc_ffcv_nf_tributo( p1, Nvl(p2,'S'), Nvl(p3,'R$'), Nvl(p4,1) );
+
+  RETURN ret;
+END;
+/
+
+GRANT EXECUTE ON dbamv.fnc_ffcv_nf_tributo_rep TO mv2000;

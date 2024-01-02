@@ -1,0 +1,1 @@
+GRANT DEBUG ON dbamv.fc_ovmd_tuss TO ACSC_FABIO_SANTOS;

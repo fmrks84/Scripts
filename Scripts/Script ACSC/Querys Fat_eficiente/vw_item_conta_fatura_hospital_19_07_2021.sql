@@ -1,0 +1,102 @@
+create or replace view ensemble.vw_item_conta_fatura_hospital as
+select
+id_atendimento,
+id_conta,
+id_lancamento,
+'I' tp_conta,
+codig_tabela,
+COD_TUSS,
+DS_TUSS,
+dt_inicio,
+dt_final,
+qt_lancamento,
+reducao_Acrescimo,
+VL_UNITARIO,
+(qt_lancamento * vl_unitario)VALOR_TOTAL,
+ValorPercPago,
+VIA_ACESSO,
+TECNICA_UTILIZADA,
+id_profissional,
+NM_profissional,
+Grau_participacao,
+TP_PAGAMENTO
+from
+(
+select
+rf.cd_atendimento id_atendimento,
+rf.cd_reg_fat id_conta,
+irf.cd_lancamento id_lancamento,
+case when tts.cd_tip_tuss = 18 then 'TUSS_TAXAS'
+when tts.cd_tip_tuss = 19 then 'TUSS_MATERIAIS'
+when tts.cd_tip_tuss = 20 then 'TUSS_MEDICAMENTOS'
+when tts.cd_tip_tuss = 22 then 'TUSS_PROCEDIMENTOS'
+when tts.cd_tip_tuss = 98 then 'PROPRIA_PACOTES'
+when tts.cd_tip_tuss = 00 then 'PROPRIA_OPERADORAS'
+when gf.cd_gru_fat in (1,2,3,13) then 'TUSS_TAXAS'
+when gf.cd_gru_fat in (6,7,14) then 'TUSS_PROCEDIMENTOS'
+when gf.cd_gru_fat in (4,5,9)then 'TUSS_MATERIAIS'
+when gf.cd_gru_fat in (8)then 'TUSS_MEDICAMENTOS'
+when gf.cd_gru_fat in (11,16) then 'PROPRIA_PACOTES' end codig_tabela,
+dbamv.fc_acsc_tuss(rf.cd_multi_empresa,
+                   irf.cd_pro_fat,
+                    rf.cd_convenio,
+                   'COD')COD_TUSS,
+dbamv.fc_acsc_tuss(rf.cd_multi_empresa,
+                   irf.cd_pro_fat,
+                    rf.cd_convenio,
+                   'DESC')DS_TUSS,
+rf.dt_inicio,
+rf.dt_final,
+irf.qt_lancamento,
+''reducao_Acrescimo ,
+case when irf.cd_reg_fat = itprest.cd_reg_fat
+  then itprest.vl_liquido
+    else irf.vl_unitario
+      end VL_UNITARIO,
+irf.vl_total_conta valor_total,
+irf.vl_percentual_multipla ValorPercPago, ---- solicitado inclusão 19-07-2021
+'UNICA'VIA_ACESSO,
+'CONVENCIONAL'TECNICA_UTILIZADA,
+case when itprest.cd_reg_fat = irf.cd_reg_fat
+  then itprest.cd_prestador
+    else irf.cd_prestador
+      end id_profissional,
+(select prest1.nm_prestador from dbamv.prestador prest1 where prest1.cd_prestador = itprest.cd_prestador or irf.cd_prestador = prest1.cd_prestador)NM_PROFISSIONAL,
+case
+when irf.cd_ati_med IN (07,15)then 'CLINICO'
+wheN irf.cd_ati_med IN (01)   then 'CIRURGIAO'
+when irf.cd_ati_med IN (02,16)then 'PRIMEIRO_AUXILIAR'
+when irf.cd_ati_med IN (03,17)then 'SEGUNDO_AUXILIAR'
+when irf.cd_ati_med IN (03,17)then 'SEGUNDO_AUXILIAR'
+when irf.cd_ati_med IN (04)then 'TERCEIRO_AUXILIAR'
+when irf.cd_ati_med IN (09)then 'INSTRUMENTADOR'
+when irf.cd_ati_med IN (06)then 'ANESTESISTA'
+when irf.cd_ati_med IN (14)then 'INTENSIVISTA'
+when itprest.cd_ati_med IN (07,15)then 'CLINICO'
+wheN itprest.cd_ati_med IN (01)then 'CIRURGIAO'
+when itprest.cd_ati_med IN (02,16)then 'PRIMEIRO_AUXILIAR'
+when itprest.cd_ati_med IN (03,17)then 'SEGUNDO_AUXILIAR'
+when itprest.cd_ati_med IN (03,17)then 'SEGUNDO_AUXILIAR'
+when itprest.cd_ati_med IN (04)then 'TERCEIRO_AUXILIAR'
+when itprest.cd_ati_med IN (09)then 'INSTRUMENTADOR'
+when itprest.cd_ati_med IN (06)then 'ANESTESISTA'
+when itprest.cd_ati_med IN (14)then 'INTENSIVISTA'
+end Grau_participacao ,
+IRF.TP_PAGAMENTO||ITPREST.TP_PAGAMENTO TP_PAGAMENTO
+from
+dbamv.reg_Fat rf
+inner join dbamv.itreg_fat irf on irf.cd_reg_fat = rf.cd_reg_fat
+inner join dbamv.atendime atend on atend.cd_atendimento = rf.cd_atendimento
+inner join ensemble.vw_convenio_faturamento conv on conv.cd_convenio = rf.cd_convenio
+left join dbamv.tuss ts on ts.cd_pro_fat = irf.cd_pro_fat and ts.cd_multi_empresa = rf.cd_multi_empresa
+                                                          and ts.cd_convenio = rf.cd_convenio
+inner join dbamv.gru_fat gf on gf.cd_gru_fat = irf.cd_gru_fat
+inner join dbamv.pro_Fat pf on pf.cd_pro_fat = irf.cd_pro_fat
+left join dbamv.tip_tuss tts on tts.cd_tip_tuss = ts.cd_tip_tuss
+left join dbamv.prestador prest on prest.cd_prestador = irf.cd_prestador
+left join dbamv.itlan_med itprest on itprest.cd_lancamento = irf.cd_lancamento and itprest.cd_reg_fat = irf.cd_reg_fat
+and ts.dt_fim_vigencia is null
+where IRF.SN_PERTENCE_PACOTE = 'N'
+and gf.cd_gru_fat in (6,7,14,11,16)
+--and rf.cd_atendimento  in (2370063,2370064)
+)where TP_PAGAMENTO = 'P';

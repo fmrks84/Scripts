@@ -1,0 +1,26 @@
+SELECT A.CD_CONVENIO,
+       A.NM_CONVENIO,
+      -- A.CD_FORNECEDOR,
+       A.DT_COMPETENCIA,
+      -- A.DS_FATURA,
+       A.CD_REMESSA,
+       A.CD_MULTI_EMPRESA,
+       A.NR_LOTE,
+       A.TP_MENSAGEM_TISS,
+       c.lo_xml, -- aqui vc acha o xml e edita o mesmo não precisando regerar o arquivo 
+       c.cd_site_xml,
+        B.ID_PAI,
+      -- B.ID,
+       A.CD_VERSAO_TISS
+       --A.TP_MENSAGEM_TISS
+FROM DBAMV.V_TISS_STATUS_PROTOCOLO A
+INNER JOIN dbamv.tiss_lote b on b.id_pai = a.ID
+INNER JOIN dbamv.site_xml c on c.cd_wizard_origem = b.id_pai
+WHERE 1=1
+and a.nr_lote = 9064212-- CD_REMESSA = 
+--and B.NR_LOTE IN (24889,24891,24890)
+/*and a.dt_competencia = '01/01/2017'
+and a.cd_convenio = 10*/
+/*and a.cd_multi_empresa = 1*\*/
+
+--select * from dbamv.site_xml

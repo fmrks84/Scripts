@@ -1,0 +1,31 @@
+DROP PROCEDURE dbamv.zg_seta_protocolo_envio ;
+COMMIT;
+
+CREATE OR REPLACE PROCEDURE dbamv.zg_seta_protocolo_envio(
+    id_tiss_mensagem NUMBER,
+    numero_protocolo STRING
+)
+IS
+    BEGIN
+
+        UPDATE tiss_mensagem
+        SET nr_protocolo_retorno = numero_protocolo
+        WHERE id = id_tiss_mensagem;
+
+        UPDATE remessa_fatura
+        SET ds_protocolo_receb_tiss = numero_protocolo,
+            ds_lote_tiss = (SELECT tiss_mensagem.nr_lote FROM tiss_mensagem WHERE tiss_mensagem.id = id_tiss_mensagem)
+        WHERE to_char(remessa_fatura.cd_remessa) = (SELECT tiss_mensagem.nr_documento
+                                                    FROM tiss_mensagem
+                                                    WHERE tiss_mensagem.id = id_tiss_mensagem);
+
+        EXCEPTION
+        WHEN OTHERS
+        THEN
+        ROLLBACK;
+        RAISE;
+
+    END zg_seta_protocolo_envio;
+COMMIT;
+GRANT EXECUTE ON dbamv.zg_seta_protocolo_envio TO zglosa;
+GRANT EXECUTE ON dbamv.zg_seta_protocolo_envio TO DBAMV;

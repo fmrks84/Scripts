@@ -1,0 +1,23 @@
+SELECT     DISTINCT     P.CD_PACIENTE , A.TP_ATENDIMENTO, P.NM_PACIENTE, P.Cd_Cns, P.NM_MAE, P.NM_PAI, P.DT_NASCIMENTO,   
+                        P.TP_SEXO, P.NR_IDENTIDADE||' - '|| P.DS_OM_IDENTIDADE RG, P.NR_CPF,
+                        P.TP_ESTADO_CIVIL, C.NM_CIDADE, P.DS_ENDERECO ||', '|| P.NR_ENDERECO ||' -'|| P.DS_COMPLEMENTO endereco, 
+                        P.NR_CEP, P.NM_BAIRRO , p.nr_fone,  P.CD_CIDADE   
+
+FROM    DBAMV.ATENDIME A,
+        DBAMV.PACIENTE P, 
+        DBAMV.CIDADE   C
+WHERE   A.CD_PACIENTE  = P.CD_PACIENTE
+AND     C.CD_CIDADE   =  P.CD_CIDADE
+AND     A.DT_ATENDIMENTO BETWEEN TO_DATE ('01/08/2012' , 'DD/MM/YYYY' ) AND TO_DATE ('31/08/2012' , 'DD/MM/YYYY')
+AND     NOT EXISTS (SELECT 1 
+                    FROM DBAMV.ATENDIME A2 
+                    WHERE A2.tp_atendimento In ('I','U') 
+                    AND A2.cd_paciente = A.cd_paciente)
+AND     A.CD_ATENDIMENTO_PAI IS NULL 
+AND     A.CD_MULTI_EMPRESA = 1
+AND     A.TP_ATENDIMENTO = 'E'
+GROUP BY P.CD_PACIENTE , A.CD_ATENDIMENTO, A.TP_ATENDIMENTO, P.NM_PACIENTE, P.Cd_Cns, P.NM_MAE, P.NM_PAI, P.DT_NASCIMENTO,   
+                         P.TP_SEXO, P.NR_IDENTIDADE||' - '|| P.DS_OM_IDENTIDADE, P.NR_CPF,
+                         P.TP_ESTADO_CIVIL, C.NM_CIDADE, P.DS_ENDERECO ||', '|| P.NR_ENDERECO ||' -'|| P.DS_COMPLEMENTO, 
+                         P.NR_CEP, P.NM_BAIRRO , p.nr_fone,  P.CD_CIDADE , a.DT_ATENDIMENTO
+ORDER BY  P.NM_PACIENTE

@@ -1,0 +1,26 @@
+SELECT
+TO_CHAR(CR.DT_EMISSAO,'DD/MM/YYYY')                            EMISSAO,
+--TO_CHAR(IR.dt_vencimento,'DD/MM/YYYY')                         VENCIMENTO,
+TRUNC(IR.DT_VENCIMENTO)                                                  VENCIMENTO,
+FR.nm_fornecedor                                               FORNECEDOR,
+CR.nr_documento                                                NUMERO_NOTA,
+IR.vl_duplicata                                                VALOR_ORIGINAL,
+IR.vl_soma_recebido                                            VALOR_RECEBIDO,
+(IR.vl_duplicata - NVL(IR.vl_soma_recebido,0))                        VALOR_A_RECEBER,
+DECODE(CR.cd_multi_empresa,1,'HMSJ',2,'PMP',3,'CDI',4,'VANG',5,'SANA',11,'CDPRO') MULTI_EMPRESA
+FROM
+DBAMV.CON_REC CR,
+DBAMV.ITCON_REC IR,
+DBAMV.FORNECEDOR FR
+WHERE
+IR.cd_con_rec = CR.cd_con_rec AND
+FR.cd_fornecedor = CR.cd_fornecedor AND
+CR.tp_con_rec IN ('C','P') 
+&FORMULA_EXCESSAO
+--and (ir.vl_duplicata+ir.vl_soma_recebido) > 0
+--and (ir.vl_duplicata - ir.vl_soma_recebido) > 0
+and IR.TP_QUITACAO NOT IN ('V','P','Q','L')
+&FORMULA_DATA
+&FORMULA_EMPRESA
+
+ORDER BY TRUNC(IR.DT_VENCIMENTO)

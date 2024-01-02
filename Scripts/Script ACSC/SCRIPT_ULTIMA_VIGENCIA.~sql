@@ -1,0 +1,192 @@
+SELECT 
+C.CD_TAB_FAT,
+C.DS_TAB_FAT,
+A.CD_PRO_FAT,
+A.DT_VIGENCIA,
+A.VL_HONORARIO,
+A.VL_OPERACIONAL,
+A.VL_TOTAL
+--E.VL_PORTE
+FROM
+VAL_PRO A 
+INNER JOIN PRO_FAT B ON B.CD_PRO_FAT = A.CD_PRO_FAT
+INNER JOIN TAB_FAT C ON C.CD_TAB_FAT = A.CD_TAB_FAT
+INNER JOIN GRU_PRO D ON D.CD_GRU_PRO = B.CD_GRU_PRO
+LEFT JOIN VAL_PORTE E ON E.CD_POR_ANE = B.CD_POR_ANE AND E.CD_TAB_FAT = A.CD_TAB_FAT
+WHERE A.DT_VIGENCIA = (SELECT MAX(X.DT_VIGENCIA) FROM VAL_PRO X WHERE X.CD_PRO_FAT = A.CD_PRO_FAT
+                                                                AND X.CD_TAB_FAT = A.CD_TAB_FAT)
+AND A.CD_PRO_FAT IN ('00258304')    
+and c.ds_tab_fat like 'HSC%'
+AND e.cd_tab_fat in (677,
+784,
+785,
+786,
+787,
+789,
+742,
+745,
+756,
+2265,
+1,
+1562,
+2085,
+2093,
+3347,
+776,
+779,
+807,
+821,
+757,
+759,
+762,
+767,
+1845,
+642,
+2087,
+1182,
+2266,
+781,
+782,
+791,
+793,
+806,
+755,
+758,
+763,
+769,
+774,
+500,
+2,
+3268,
+941,
+1846,
+2607,
+3027,
+872,
+141,
+181,
+777,
+778,
+801,
+741,
+743,
+2088,
+581,
+4,
+1281,
+3447,
+2988,
+783,
+790,
+799,
+805,
+748,
+750,
+754,
+761,
+771,
+2090,
+689,
+2086,
+2727,
+110,
+2608,
+3608,
+3607,
+2326,
+792,
+795,
+798,
+747,
+753,
+766,
+772,
+773,
+850,
+2091,
+525,
+942,
+1081,
+2567,
+93,
+788,
+804,
+808,
+865,
+746,
+751,
+760,
+770,
+775,
+1181,
+109,
+871,
+822,
+824,
+582,
+10,
+551,
+780,
+794,
+796,
+802,
+803,
+809,
+752,
+768,
+1561,
+2568,
+823,
+961,
+2089,
+690,
+9)                                                      
+                                                          
+                                                                
+
+SELECT 
+A.CD_PRO_FAT,
+C.CD_TAB_FAT,
+C.DS_TAB_FAT,
+A.DT_VIGENCIA,
+A.VL_HONORARIO,
+A.VL_OPERACIONAL,
+A.VL_TOTAL,
+a.sn_ativo
+
+FROM
+VAL_PRO A 
+INNER JOIN PRO_FAT B ON B.CD_PRO_FAT = A.CD_PRO_FAT
+INNER JOIN TAB_FAT C ON C.CD_TAB_FAT = A.CD_TAB_FAT
+INNER JOIN GRU_PRO D ON D.CD_GRU_PRO = B.CD_GRU_PRO
+LEFT JOIN VAL_PORTE E ON E.CD_POR_ANE = B.CD_POR_ANE AND E.CD_TAB_FAT = A.CD_TAB_FAT
+WHERE A.DT_VIGENCIA = (SELECT MAX(X.DT_VIGENCIA) FROM VAL_PRO X WHERE X.CD_TAB_FAT = A.CD_TAB_FAT AND X.CD_PRO_FAT = A.CD_PRO_FAT)
+AND C.DS_TAB_FAT LIKE '%HSC%'--A.CD_TAB_FAT IN (2)
+and  A.CD_PRO_FAT IN ('00277451'
+,'00299109'
+,'00314824'
+,'02040923'
+,'00325336'
+,'00332721')
+AND B.SN_ATIVO = 'S'
+;
+select * from pro_Fat where cd_pro_fat = '00258304'
+;
+select * from itregra x2 where x2.cd_regra IN (41) 
+and x2.cd_gru_pro = 89
+;
+select * from gru_pro where cd_gru_pro = 96
+select  * from produto where cd_pro_fat = 00253581
+
+
+select cd_guia, tp_guia, cd_paciente, cd_aviso_cirurgia, cd_atendimento from guia where cd_aviso_cirurgia = 288577
+select * from aviso_cirurgia where /*cd_aviso_cirurgia = 288539*/ cd_atendimento = 3838478
+
+--- PADRAO REFERENCIA COBRANÇA OPME
+SELECT CONV.CD_CONVENIO||' - '||CONV.NM_CONVENIO NM_CONVENIO,
+       ECONV.TP_OPME_VL_REFERENCIA
+       FROM 
+Empresa_Convenio ECONV
+INNER JOIN CONVENIO CONV ON CONV.CD_CONVENIO = ECONV.CD_CONVENIO
+WHERE ECONV.CD_MULTI_EMPRESA = 7
+AND CONV.TP_CONVENIO = 'C'

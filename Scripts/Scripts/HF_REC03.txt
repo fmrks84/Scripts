@@ -1,0 +1,147 @@
+SELECT
+EMPRESA,CD_MULTI_EMPRESA,EMPRESA_O,CD_LANC,CD_CON_COR,CD_BANCO,CD_AGENCIA,NR_CONTA,DT_MOVIMENTACAO,
+NR_DOCUMENTO_IDENTIFICACAO,DS_LANC,DS_MOVIMENTACAO,VL_MOVIMENTACAO,VL_CONCILIADO,CD_MOV_CONCOR,
+CD_CON_COR_1,CD_FORNEC,CD_MOV_DEPOSITO_AGRUP,ZCONC
+FROM(
+SELECT
+EMPRESA,CD_MULTI_EMPRESA,EMPRESA_O,CD_LANC,CD_CON_COR,CD_BANCO,CD_AGENCIA,NR_CONTA,DT_MOVIMENTACAO,
+NR_DOCUMENTO_IDENTIFICACAO,DS_LANC,DS_MOVIMENTACAO,VL_MOVIMENTACAO,VL_CONCILIADO,CD_MOV_CONCOR,
+CD_CON_COR_1,CD_FORNEC,CD_MOV_DEPOSITO_AGRUP,ZCONC FROM (
+SELECT ALL  'Empresa ' || e.cd_multi_empresa || ' - ' || e.ds_multi_empresa Empresa
+      ,e.cd_multi_empresa  cd_multi_empresa
+      ,e.cd_multi_empresa || ' - ' || e.ds_multi_empresa Empresa_o
+       ,  V_MOV_CONCOR.CD_LAN_CONCOR     CD_LANC, 
+  DBAMV.V_BCO_CONTA.CD_CON_COR, 
+  V_BCO_CONTA.CD_BANCO CD_BANCO, 
+  V_BCO_CONTA.CD_AGENCIA CD_AGENCIA, 
+  V_BCO_CONTA.NR_CONTA    NR_CONTA,
+  V_MOV_CONCOR.DT_MOVIMENTACAO,
+  V_MOV_CONCOR.NR_DOCUMENTO_IDENTIFICACAO, 
+  V_MOV_CONCOR.DS_LAN_CONCOR    DS_LANC, 
+  V_MOV_CONCOR.DS_MOVIMENTACAO, 
+ ABS( V_MOV_CONCOR.VL_MOVIMENTACAO)  VL_MOVIMENTACAO,
+  V_MOV_CONCOR.VL_CONCILIADO,
+  V_MOV_CONCOR.CD_MOV_CONCOR, 
+  DBAMV.V_MOV_CONCOR.CD_CON_COR CD_CON_COR_1,
+  V_MOV_CONCOR.CD_FORNECEDOR CD_FORNEC,
+  V_Mov_Concor.Cd_Mov_Deposito_Agrup,
+  V_Mov_Concor.sn_conciliado ZCONC
+
+FROM 
+  DBAMV.V_MOV_CONCOR , 
+  dbamv.multi_empresas e,
+  DBAMV.V_BCO_CONTA,
+  (select  count(*) total, 
+              count(decode(M.Sn_Conciliado,'S','S',null)) sim ,
+              m.cd_mov_deposito_agrup
+   from   dbamv.mov_concor M
+   where  m.cd_mov_deposito_agrup Is Not Null
+   group by M.cd_mov_deposito_agrup)  Tb_Conciliacao
+
+WHERE
+         V_MOV_CONCOR.CD_CON_COR    =  DBAMV.V_BCO_CONTA.CD_CON_COR 
+and   V_BCO_CONTA.cd_multi_empresa = e.cd_multi_empresa
+-- Parâmetro por código do banco
+-- AND DBAMV.V_BCO_CONTA.CD_BANCO = 
+
+-- Parâmetro por lançamento na conta corrente
+-- and DBAMV.V_MOV_CONCOR.CD_LAN_CONCOR = 
+
+-- Parâmetro por Código do fornecedor 
+-- DBAMV.V_MOV_CONCOR.CD_FORNECEDOR = 
+
+-- Parâmetro por Código da Conta Corrente
+-- and DBAMV.V_MOV_CONCOR.CD_CON_COR = 
+
+-- Código da Empresa
+&FORMULA_EMPRESA
+&FORMULA_DATA
+
+And V_Mov_Concor.Cd_Mov_Deposito_Agrup = Tb_Conciliacao.Cd_Mov_Deposito_Agrup(+)
+-- Substituir as datas - Primeira Inicial , depois final
+&FORMULA_DATA
+--AND TRUNC(V_MOV_CONCOR.DT_MOVIMENTACAO) BETWEEN TO_DATE('01/01/2009','DD/MM/YYYY') AND TO_DATE('31/01/2009','DD/MM/YYYY')
+--AND  V_MOV_CONCOR.DT_MOVIMENTACAO >= TO_DATE( TO_CHAR( '01/02/2009', 'DD/MM/YYYY' ) || ' 00:00:00', 'DD/MM/YYYY HH24:MI:SS' )
+--AND  V_MOV_CONCOR.DT_MOVIMENTACAO <= TO_DATE( TO_CHAR( '28/02/2009' , 'DD/MM/YYYY' ) || ' 23:59:59', 'DD/MM/YYYY HH24:MI:SS' )
+-- Substituir o Parâmetro se a query vai trazer agrupado ou não
+--And (:P_Agrupado = 'N' Or ( :P_Agrupado = 'S' And ( V_Mov_Concor.CD_MOV_DEPOSITO_AGRUP Is Null Or (V_Mov_Concor.CD_MOV_DEPOSITO_AGRUP Is Not Null  And Tb_Conciliacao.Total <> Tb_Conciliacao.Sim  and Tb_Conciliacao.Sim <> 0  ) ) ))
+&FORMULA_AGRUPAMENTO
+AND V_MOV_CONCOR.cd_lan_concor IN (73,80,11,688,665,673,668,691,696,532)
+
+
+UNION
+
+SELECT ALL   'Empresa ' || e.cd_multi_empresa || ' - ' || e.ds_multi_empresa Empresa
+      ,e.cd_multi_empresa  cd_multi_empresa
+      ,e.cd_multi_empresa || ' - ' || e.ds_multi_empresa Empresa_o
+       ,  V_MOV_CONCOR.CD_LAN_CONCOR     CD_LANC, 
+  DBAMV.V_BCO_CONTA.CD_CON_COR, 
+  V_BCO_CONTA.CD_BANCO CD_BANCO, 
+  V_BCO_CONTA.CD_AGENCIA CD_AGENCIA, 
+  V_BCO_CONTA.NR_CONTA    NR_CONTA,
+  Min(V_MOV_CONCOR.DT_MOVIMENTACAO) DT_MOVIMENTACAO,
+  'AG-' || To_Char(V_MOV_CONCOR.Cd_Mov_Deposito_Agrup)  NR_DOCUMENTO_IDENTIFICACAO, 
+  V_MOV_CONCOR.DS_LAN_CONCOR    DS_LANC, 
+  'DEPÓSITO AGRUPADO DO CAIXA ' DS_MOVIMENTACAO, 
+ ABS( Sum(V_MOV_CONCOR.VL_MOVIMENTACAO))  VL_MOVIMENTACAO,
+  Sum(V_MOV_CONCOR.VL_CONCILIADO) VL_CONCILIADO,
+  0 CD_MOV_CONCOR, 
+  DBAMV.V_MOV_CONCOR.CD_CON_COR,
+  0 CD_FORNEC
+  ,V_Mov_Concor.Cd_Mov_Deposito_Agrup
+  ,V_MOV_CONCOR.sn_conciliado ZCONC
+FROM 
+  DBAMV.V_MOV_CONCOR , 
+  dbamv.multi_empresas e,
+  DBAMV.V_BCO_CONTA,
+  (select  count(*) total, 
+              count(decode(M.Sn_Conciliado,'S','S',null)) sim ,
+              m.cd_mov_deposito_agrup
+   from   dbamv.mov_concor M
+   where  m.cd_mov_deposito_agrup Is Not Null
+   group by M.cd_mov_deposito_agrup)  Tb_Conciliacao
+
+WHERE
+         V_MOV_CONCOR.CD_CON_COR    =  DBAMV.V_BCO_CONTA.CD_CON_COR 
+and   V_BCO_CONTA.cd_multi_empresa = e.cd_multi_empresa
+-- Substituir o Parâmetro se a query vai trazer agrupado ou não
+--And  :P_Agrupado = 'S'
+-- Parâmetro por código do banco
+-- AND DBAMV.V_BCO_CONTA.CD_BANCO = 
+
+-- Parâmetro por lançamento na conta corrente
+-- and DBAMV.V_MOV_CONCOR.CD_LAN_CONCOR = 
+
+-- Parâmetro por Código do fornecedor 
+-- DBAMV.V_MOV_CONCOR.CD_FORNECEDOR = 
+
+-- Parâmetro por Código da Conta Corrente
+-- and DBAMV.V_MOV_CONCOR.CD_CON_COR = 
+
+-- Código da Empresa
+&FORMULA_EMPRESA 
+
+And V_Mov_Concor.Cd_Mov_Deposito_Agrup = Tb_Conciliacao.Cd_Mov_Deposito_Agrup  (+)
+
+-- Substituir as datas - Primeira Inicial , depois final
+&FORMULA_DATA
+---AND TRUNC(V_MOV_CONCOR.DT_MOVIMENTACAO) BETWEEN TO_DATE('01/01/2009','DD/MM/YYYY') AND TO_DATE('31/01/2009','DD/MM/YYYY')
+--AND  V_MOV_CONCOR.DT_MOVIMENTACAO >= TO_DATE( TO_CHAR( 'DD/MM/YYYY', 'DD/MM/YYYY' ) || ' 00:00:00', 'DD/MM/YYYY HH24:MI:SS' )
+--AND  V_MOV_CONCOR.DT_MOVIMENTACAO <= TO_DATE( TO_CHAR( 'DD/MM/YYYY' , 'DD/MM/YYYY' ) || ' 23:59:59', 'DD/MM/YYYY HH24:MI:SS' )
+
+--And  ( V_Mov_Concor.CD_MOV_DEPOSITO_AGRUP Is Not Null 
+--          And Tb_Conciliacao.Total = Tb_Conciliacao.Sim  or Tb_Conciliacao.Sim = 0  )
+&FORMULA_AGRUPAMENTO
+
+AND V_MOV_CONCOR.cd_lan_concor IN (73,80,11,688,665,673,668,691,696,532)
+Group  By    'Empresa ' || e.cd_multi_empresa || ' - ' || e.ds_multi_empresa 
+      ,e.cd_multi_empresa  ,       e.cd_multi_empresa || ' - ' || e.ds_multi_empresa 
+       ,  V_Mov_Concor.Cd_Mov_Deposito_Agrup, 'AG-' || To_Char(V_MOV_CONCOR.Cd_Mov_Deposito_Agrup) , 'DEPÓSITO AGRUPADO DO CAIXA ' , V_MOV_CONCOR.CD_LAN_CONCOR, DBAMV.V_BCO_CONTA.CD_CON_COR, V_BCO_CONTA.CD_BANCO, V_BCO_CONTA.CD_AGENCIA, V_BCO_CONTA.NR_CONTA, V_MOV_CONCOR.DS_LAN_CONCOR, DBAMV.V_MOV_CONCOR.CD_CON_COR,V_MOV_CONCOR.sn_conciliado
+
+
+ORDER BY DT_MOVIMENTACAO
+)
+WHERE
+CD_MOV_CONCOR > 0
+)
+&FORMULA_CON

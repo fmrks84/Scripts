@@ -1,0 +1,38 @@
+SELECT b.inst_id INST_ID_L
+      ,b.sid SID_L
+      ,b.SERIAL# SERIAL_L
+      ,b.USERNAME USERNAME_L
+      ,substr(c.nm_usuario, 1, 60) NM_USUARIO_L
+      ,substr(c.ds_observacao, 1, 30) SETOR_L
+      ,b.machine MACHINE_L
+      ,substr(b.action, 1, 30) ACTION_L
+      ,b.osuser OSUSER_L
+      ,a.blocking_session
+      ,a.inst_id
+      ,a.sid
+      ,a.SECONDS_IN_WAIT
+      ,a.USERNAME
+      ,substr(d.nm_usuario, 1, 60) NM_USUARIO
+      ,substr(d.ds_observacao, 1, 30) SETOR
+      ,a.MACHINE
+      ,substr(a.ACTION, 1, 30) ACTION
+      ,a.OSUSER
+      ,a.TERMINAL
+      ,a.MODULE
+      ,a.BLOCKING_SESSION_STATUS
+      ,a.WAIT_CLASS
+      ,a.STATE
+      ,a.LOCKWAIT
+      ,a.PLSQL_OBJECT_ID
+  FROM gv$session a, gv$session b, dbasgu.usuarios c, dbasgu.usuarios d
+ WHERE a.status = 'ACTIVE'
+   AND a.USERNAME IS NOT NULL
+   AND nvl(a.blocking_session, 0) = b.sid(+)
+   and nvl(a.BLOCKING_INSTANCE, 0) = b.INST_ID(+)
+   AND c.cd_usuario(+) = b.USERNAME
+   AND d.cd_usuario(+) = a.username
+ ORDER BY a.SECONDS_IN_WAIT DESC
+ 
+--alter system kill session '2469,42175'
+
+--select * from repasse_conta a where a.cd_repasse_conta = 5189

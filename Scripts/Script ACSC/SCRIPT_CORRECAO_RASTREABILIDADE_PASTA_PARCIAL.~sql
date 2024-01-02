@@ -1,0 +1,42 @@
+select
+       r.cd_atendimento ATENDIMENTO,
+       r.cd_reg_fat conta,
+       r.cd_convenio,
+       c.nm_convenio,
+       r.dt_inicio,
+       r.dt_final,
+       d.cd_documento_pasta_parcial,
+       d.nr_pasta,
+       d.dt_abertura,
+       d.dt_encerramento,
+       d.cd_usuario_encerramento,
+       u.nm_usuario
+from reg_fat r
+INNER JOIN documento_pasta_parcial d ON (r.cd_reg_fat = d.cd_reg_fat (+))
+LEFT JOIN dbasgu.vw_usuarios       u ON (d.cd_usuario_encerramento = u.cd_usuario)
+INNER JOIN convenio                c ON (c.cd_convenio = r.cd_convenio)
+where r.cd_atendimento in (4114821)  
+order by 6
+
+
+
+;
+select * from documento_pasta_parcial where cd_atendimento in (4114821) order by 3;
+
+
+
+/*PROTOCOLO_DOC SEM RASTREABILIDADE*/
+select *
+from it_protocolo_doc p
+where p.cd_atendimento in (4114821)
+and p.cd_documento_pasta_parcial is null
+order by 3
+;
+
+--374871
+
+update it_protocolo_doc p set p.cd_documento_pasta_parcial = 374871 where p.cd_protocolo_doc in (2835431,
+2834192,
+2821671,
+2837383,
+2886079)

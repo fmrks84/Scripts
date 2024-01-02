@@ -1,0 +1,43 @@
+-- Alterar a configura no tiss_convenio para receber arquivos de pagamento 
+/*update convenio_conf_tiss a set a.sn_retorno_fat_tiss = 'S' where 1 =1 ;
+commit; */
+
+-- chave tiss 4.0 TELA NOVA APURAÇÃO DE IMPORTAÇÃO DE PAGAMENTOS
+ --FFCV  M_CONVENIO_CONF_TISS  VALOR = S  DESC = TELA NOVA APURAÇÃO DE IMPORTAÇÃO DE PAGAMENTOS  
+--select * from configuracao b where b.chave = 'M_CONVENIO_CONF_TISS' AND b.cd_multi_empresa = 7
+insert into dbamv.configuracao (cd_sistema,chave,valor,sn_somente_leitura,cd_configuracao,cd_configuracao_processo,ds_configuracao,cd_multi_empresa) values
+('FFCV','M_CONVENIO_CONF_TISS','S','N',SEQ_CONFIGURACAO.NEXTVAL,NULL,'TELA DE APURACAO DE IMPORTACAO DE PAGAMENTOS',3);
+COMMIT;
+insert into dbamv.configuracao (cd_sistema,chave,valor,sn_somente_leitura,cd_configuracao,cd_configuracao_processo,ds_configuracao,cd_multi_empresa) values
+('FFCV','M_CONVENIO_CONF_TISS','S','N',SEQ_CONFIGURACAO.NEXTVAL,NULL,'TELA DE APURACAO DE IMPORTACAO DE PAGAMENTOS',4);
+COMMIT;
+insert into dbamv.configuracao (cd_sistema,chave,valor,sn_somente_leitura,cd_configuracao,cd_configuracao_processo,ds_configuracao,cd_multi_empresa) values
+('FFCV','M_CONVENIO_CONF_TISS','S','N',SEQ_CONFIGURACAO.NEXTVAL,NULL,'TELA DE APURACAO DE IMPORTACAO DE PAGAMENTOS',7);
+COMMIT;
+insert into dbamv.configuracao (cd_sistema,chave,valor,sn_somente_leitura,cd_configuracao,cd_configuracao_processo,ds_configuracao,cd_multi_empresa) values
+('FFCV','M_CONVENIO_CONF_TISS','S','N',SEQ_CONFIGURACAO.NEXTVAL,NULL,'TELA DE APURACAO DE IMPORTACAO DE PAGAMENTOS',10);
+COMMIT;
+insert into dbamv.configuracao (cd_sistema,chave,valor,sn_somente_leitura,cd_configuracao,cd_configuracao_processo,ds_configuracao,cd_multi_empresa) values
+('FFCV','M_CONVENIO_CONF_TISS','S','N',SEQ_CONFIGURACAO.NEXTVAL,NULL,'TELA DE APURACAO DE IMPORTACAO DE PAGAMENTOS',11);
+COMMIT;
+insert into dbamv.configuracao (cd_sistema,chave,valor,sn_somente_leitura,cd_configuracao,cd_configuracao_processo,ds_configuracao,cd_multi_empresa) values
+('FFCV','M_CONVENIO_CONF_TISS','S','N',SEQ_CONFIGURACAO.NEXTVAL,NULL,'TELA DE APURACAO DE IMPORTACAO DE PAGAMENTOS',25);
+COMMIT;
+
+
+---- inserir a tela M_BAIXA_LOTE na tela de modulos 
+--select M_BAIXA_LOTE  from dbasgu.modulos xp where xp.cd_modulo = 'M_BAIXA_LOTE'
+INSERT INTO DBASGU.MODULOS (CD_MODULO,NM_MODULO,TP_MODULO,DS_OBSERVACAO,CD_CLIENTE,CD_HELP,DT_CRIACAO,CD_SISTEMA_DONO,SN_ATIVO_REL_ESPECIFICO,SN_ARMAZENA_PARAMETRO,SN_CF_ACESSO,DS_MENU_PRINCIPAL,DS_TIPO_SEGMENTO,SN_SEG_ATIVO,TP_TELA,DS_CAMINHO,LO_ICONE,TP_PERFIL,SN_HTML5) VALUES
+('M_BAIXA_LOTE','BAIXA LOTE','F',NULL,NULL,NULL,TO_DATE(SYSDATE,'DD/MM/RRRR'),'FNFI','S','N','N',NULL,NULL,'N',NULL,NULL,NULL,'SISTEMA','N');
+COMMIT;
+
+--- inserir acesso a tela m_baixa_lote para os usuários
+--select * from dbasgu.mod_sis ms where ms.cd_sistema = 'FNFI' and ms.cd_modulo = 'M_BAIXA_LOTE'
+INSERT INTO DBASGU.MOD_SIS (CD_SISTEMA,CD_MODULO,CD_HELP) VALUES ('FNFI','M_BAIXA_LOTE',NULL);
+COMMIT;
+
+insert into dbasgu.aut_mod (cd_usuario,cd_modulo,sn_consultar,sn_alterar,sn_excluir,sn_incluir)
+(SELECT cd_usuario,'M_BAIXA_LOTE','N','N','N','N' FROM dbasgu.usuarios  where sn_ativo = 'S' /*and cd_usuario not in ('DBAMV','GFLIMA','FADSANTOS')*/);
+COMMIT;
+
+--select * from dbasgu.usuarios x where x.cd_usuario = 'DBAMV' 

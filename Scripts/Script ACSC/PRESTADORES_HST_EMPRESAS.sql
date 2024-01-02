@@ -1,0 +1,29 @@
+--update 
+SELECT 
+DISTINCT 
+pr.cd_prestador,
+pr.nm_prestador,
+pr.ds_codigo_conselho,
+decode(pr.sn_atuante,'P','Provisorio','S','Atuante','N','Eventual','R','Residente')tipo_participacao,
+decode(pr.tp_situacao,'I','Inativo','A','Ativo')situacao,
+pr.dt_inativacao,
+v.cd_multi_empresa
+
+FROM 
+prestador pr 
+left join prestador_tipo_vinculo v on v.cd_prestador = pr.cd_prestador
+where v.cd_multi_empresa = 3
+--set pr.tp_situacao = 'I'
+--, pr.dt_inativacao = '21/06/2023'
+
+/*group by 
+pr.cd_prestador,
+pr.nm_prestador,
+pr.ds_codigo_conselho,
+pr.sn_atuante,
+pr.tp_situacao,
+pr.dt_inativacao
+--v.cd_multi_empresa
+having count(nm_prestador) > = 2*/
+--order by 2
+--commit;

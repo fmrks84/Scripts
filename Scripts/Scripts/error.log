@@ -1,0 +1,11 @@
+SQL NAVIGATOR SEVERE ERROR LOG
+
+Ver: 3.0d2 Time: 18/6/2009 08:43:18 Msg: Outline index not found
+Ver: 3.0d2 Time: 18/6/2009 08:43:18 Msg: Access violation at address 0049397A in module 'sqlnav3.exe'. Read of address 0221B250
+Ver: 3.0d2 Time: 26/6/2009 14:06:50 Msg: Access violation at address 0049397A in module 'sqlnav3.exe'. Read of address 02294118
+Ver: 3.0d2 Time: 26/6/2009 14:06:51 Msg: Access violation at address 0049397A in module 'sqlnav3.exe'. Read of address 02294118
+Ver: 3.0d2 Time: 14/7/2009 09:18:38 Msg: Access violation at address 0051C95B in module 'sqlnav3.exe'. Read of address 00000035
+Ver: 3.0d2 Time: 4/8/2009 09:02:25 Msg: Access violation at address 0051CDCC in module 'sqlnav3.exe'. Read of address 00000158
+Ver: 3.0d2 Time: 27/11/2009 10:51:39 Msg: Access violation at address 0051C95B in module 'sqlnav3.exe'. Read of address 00000035
+Ver: 3.0d2 Time: 11/1/2010 14:23:23 Msg: Access violation at address 0051C95B in module 'sqlnav3.exe'. Read of address 00000035
+Ver: 3.0d2 Time: 12/08/2010 12:42:31 Msg: Access violation at address 8000000F. Read of address 8000000F

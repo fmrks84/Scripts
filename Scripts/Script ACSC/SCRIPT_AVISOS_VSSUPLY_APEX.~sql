@@ -1,0 +1,35 @@
+select 
+G.CD_CONVENIO,
+G.CD_AVISO_CIRURGIA,
+G.NR_GUIA,
+G.TP_GUIA,
+G.NR_GUIA,
+G.CD_SENHA,
+G.DT_SOLICITACAO,
+G.DT_AUTORIZACAO,
+ig.dt_geracao,
+ig.cd_pro_fat,
+ig.cd_usu_geracao
+
+
+from
+guia g
+inner join aviso_cirurgia cr on cr.cd_aviso_cirurgia = g.cd_aviso_cirurgia
+INNER JOIN CIRURGIA_AVISO CRr ON CRr.CD_AVISO_CIRURGIA = cr.CD_AVISO_CIRURGIA
+INNER JOIN it_guia ig on ig.cd_guia = g.cd_guia
+where g.tp_guia = 'O'
+and g.cd_aviso_cirurgia is not null
+and g.cd_atendimento is null
+and cr.cd_multi_empresa = 7
+and crr.cd_convenio not in (40)
+and ig.cd_pro_fat is not null
+--and ig.cd_usu_geracao = 'MVINTEGRACAO'
+--and trunc(ig.dt_geracao) > = to_date('31/08/2023','dd/mm/rrrr')
+--and ig.cd_pro_fat is not null
+--and g.cd_aviso_cirurgia = 376291
+order by g.cd_guia desc 
+--And atd.cd_convenio = 41
+
+
+---376291
+

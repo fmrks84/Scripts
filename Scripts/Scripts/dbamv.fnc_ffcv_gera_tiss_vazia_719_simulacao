@@ -1,0 +1,290 @@
+CREATE OR REPLACE FUNCTION fnc_ffcv_gera_tiss_vazia_719
+  ( pnAtendimento       in number,
+    pnConvenio          in number,
+    pnEmpresa           in number    )  RETURN varchar2 IS
+  --
+  cursor cConta is
+    select min(reg_fat.cd_reg_fat) cd_reg_fat,
+         reg_fat.nr_guia_envio_principal
+      from dbamv.reg_fat
+     where reg_fat.cd_atendimento   = pnAtendimento
+     group by reg_fat.nr_guia_envio_principal ;
+  --
+  cursor cAtendime is
+    select atendime.nr_guia_envio_principal,
+           atendime.tp_atendimento
+      from dbamv.atendime
+     where atendime.cd_atendimento   = pnAtendimento
+      and  atendime.cd_multi_empresa = dbamv.Pkg_Mv2000.Le_Empresa;
+  --
+  cursor cGuiaInternacao is
+    select guia.nr_guia
+      from dbamv.guia
+     where guia.cd_atendimento = pnAtendimento
+       and guia.tp_guia        = 'I';
+  --
+  cursor cGuiaRI( pnConta in dbamv.reg_fat.cd_reg_fat%type ) is
+    select tiss.nr_guia
+      from dbamv.tiss_nr_guia tiss
+     where tiss.cd_atendimento = pnAtendimento
+       and tiss.cd_reg_fat     = pnConta
+       and tiss.tp_guia        = 'RI';
+  --
+  /* pda 274056 - 16/03/2009 - Amalia Araújo - Cursor para identificar a regra de recém-nascido.  */
+  cursor cRecemNascido is
+    select atendime.cd_atendimento,
+           atendime.cd_convenio,
+           atendime.sn_recem_nato,
+           atendime.cd_leito,
+           unid_int.cd_unid_int,
+           unid_int.cd_setor
+      from dbamv.atendime,
+           dbamv.leito,
+           dbamv.unid_int,
+           dbamv.regra_pro_fat_empresa regra
+     where atendime.cd_atendimento         = pnAtendimento
+       and nvl(atendime.sn_recem_nato,'N') = 'S'
+       and leito.cd_leito                  = atendime.cd_leito
+       and unid_int.cd_unid_int            = leito.cd_unid_int
+       and regra.cd_multi_empresa_origem   = dbamv.pkg_mv2000.le_empresa
+       and regra.cd_convenio               = atendime.cd_convenio
+       and nvl(regra.cd_setor,0)           = unid_int.cd_setor
+       and nvl(regra.sn_rn,'N')            = 'S';
+  /* pda 274056 - fim */
+  --
+  cursor cVersaoTiss is
+  select cct.cd_versao_tiss
+    from dbamv.convenio_conf_tiss cct
+    where cct.cd_convenio = pnConvenio;
+  --
+  vCdVersaoTiss     dbamv.convenio_conf_tiss.cd_versao_tiss%type;
+  --
+  vTpGuiaTiss    varchar2(02);
+  vNrGuia           varchar2(100);
+  vNrGuiaSolic      varchar2(100);
+  vNrGuiaRI         varchar2(100);
+  vContratado       varchar2(100);
+  pvMsgErro         varchar2(2000);
+  --
+  nCtlSP            number(2) := 0;
+  nCtlHI            number(2) := 0;
+  nEmpresaFilha     number(5);
+  nConta          dbamv.reg_fat.cd_reg_fat%type;            /* PDA254997  */
+  nEmpresa          dbamv.atendime.cd_multi_empresa%type;     /* pda 274056 */
+  --
+  vcConta           cConta%rowtype;
+  vcAtendime        cAtendime%rowtype;
+  vcRecemNascido    cRecemNascido%rowtype;                    /* pda 274056 */
+  --
+BEGIN
+  --
+  /*   pda 201664 - 22/10/2007 - Amalia Araújo - Reformulação TISS 1.parte
+       Função específica para o cliente 719 (Hospital Santa Joana / ProMatre), para gerar os registros na
+       tabela TISS_NR_GUIA referentes às guias de SP e HI em branco que são impressas no momento em que é
+       aberto o atendimento de internação. Estes números de guia serão aproveitados quando forem impressas
+       as guias de envio pela PKG_FFCV_TISS_AUX.FNC_RETORNA_NR_GUIA_HOSPITAL.
+     IMPORTANTE: No parâmetro pnEmpresa deve vir a empresa logada (empresa-mãe).  */
+  --
+  if nvl( dbamv.pkg_mv2000.le_cliente, 0 ) <> 719 then
+    return null;
+  end if;
+  --
+  /* pda 274056 - 16/03/2009 - Amalia Araújo - Utilizando nEmpresa no lugar do parâmetro, em toda a função.  */
+  nEmpresa := pnEmpresa;
+  --
+  open  cConta;
+  fetch cConta into vcConta;
+  close cConta;
+  nConta := vcConta.cd_reg_fat;
+  --
+  open  cAtendime;
+  fetch cAtendime into vcAtendime;
+  close cAtendime;
+  --
+  open  cVersaoTiss;
+  fetch cVersaoTiss into vCdVersaoTiss;
+  close cVersaoTiss;
+  if vCdVersaoTiss is null then
+    return NULL;
+  end if;
+  --
+  if vCdVersaoTiss>='3.00.00' then
+    --
+    --========================================================================================================
+    --
+  DECLARE
+        --
+        Cursor cTisGuiaGeradas (vTpGuia in varchar2, vCdEmpresaFilha in varchar2) is
+            select count(*)
+                from dbamv.tiss_guia tg
+                where tg.cd_atendimento = pnAtendimento
+                  and nm_xml = vTpGuia
+                  and nvl(substr(nm_autorizador_conv,2),lpad(dbamv.pkg_mv2000.le_empresa,2,'0')) = vCdEmpresaFilha;
+        --
+    vResult          VARCHAR2(4000);
+    pmsg           VARCHAR2(4000);
+    nTotGuiasFilhas number;
+    --
+  BEGIN
+    --
+    if pnEmpresa in (1,2) and vcAtendime.tp_atendimento = 'I' then -- tratamento de guias em Branco somente para empresas 1 e 2 e Internados
+        --
+      -- gera 1 SP da empresa 4 independente da empresa pai 1 ou 2
+    for i in 4..4 loop
+      --
+      nTotGuiasFilhas := 0;
+      open  cTisGuiaGeradas('guiaSP_SADT',lpad(i,2,'0'));
+      fetch cTisGuiaGeradas into nTotGuiasFilhas;
+      close cTisGuiaGeradas;
+          if nTotGuiasFilhas = 0 then -- só gera guia vazia se ainda não tiver uma guia já gerada automaticamente da mesma empresa
+          vResult := DBAMV.FNC_FFCV_GERA_TISS(pnConvenio,'F_GERA_SPSADT_AVULSA',pnAtendimento,vcConta.cd_reg_fat,'CRED_INTERNACAO',null,null,null,null,null,null,pmsg,'#'||lpad(i,4,'0'));
+            if pMsg is not null then
+              RETURN 'Problema ao gerar guia SP/SADT em branco: '||pMsg;
+            else
+              commit;
+          end if;
+          end if;
+    end loop;
+      --
+      for i in 4..5-(pnEmpresa-1) loop -- Empresa mãe 1 = 1HI empresa 4 e 1HI empresa 5 / empresa mãe 2 = 1HI empresa 4
+      nTotGuiasFilhas := 0;
+      open  cTisGuiaGeradas('guiaHonorarioIndividual',lpad(i,2,'0'));
+      fetch cTisGuiaGeradas into nTotGuiasFilhas;
+      close cTisGuiaGeradas;
+          if nTotGuiasFilhas = 0 then -- só gera guia vazia se ainda não tiver uma guia já gerada automaticamente da mesma empresa
+            vResult := DBAMV.FNC_FFCV_GERA_TISS(pnConvenio,'F_GERA_HI_AVULSA',pnAtendimento,vcConta.cd_reg_fat,null,null,null,null,null,null,null,pmsg,'#'||lpad(i,4,'0'));
+            if pMsg is not null then
+          RETURN 'Problema ao gerar guia H.I. em branco: '||pMsg;
+          else
+          commit;
+            end if;
+          end if;
+      end loop;
+    --
+      end if;
+      --
+  END;
+    --========================================================================================================
+    --
+  else
+    --
+    --
+    open  cGuiaRI( vcConta.cd_reg_fat );
+    fetch cGuiaRI into vNrGuiaRI;
+    close cGuiaRI;
+    --
+    open  cGuiaInternacao;
+    fetch cGuiaInternacao into vNrGuiaSolic;
+    close cGuiaInternacao;
+    --
+    /* pda 274056 - 16/03/2009 - Amalia Araújo
+     O atendimento onde será criada a guia de Resumo de Internação para a empresa 4será identificado pelo check
+   de Recém-nato marcado, e se o Setor da unidade de internação referente ao leito informado no atendimento
+   for o mesmo da regra de distribuição de procedimentos por empresa que está com o check RN marcado.
+   A guia de Resumo de Internação será criada para a empresa Vanguarda - 4.
+   Será criada a guia de Honorário Individual para a anestesia.
+   Não serão criadas guias de SP/SADT em branco para este tipo de atendimento.               */
+    open  cRecemNascido;
+    fetch cRecemNascido into vcRecemNascido;
+    if cRecemNascido%found then
+      nEmpresa := 4;
+    end if;
+    close cRecemNascido;
+    /* pda 274056 - fim */
+    --
+    vContratado := dbamv.pkg_ffcv_tiss_aux.fnc_retorna_contratado( pnAtendimento, pnConvenio, null, null, null, null );
+    --
+    /* Cria o registro da guia de Resumo de Internação, caso ainda não haja.   */
+    if vNrGuiaRI is null then
+      --
+      if vcConta.nr_guia_envio_principal is null then
+        vNrGuiaRI := dbamv.pkg_ffcv_guia.fnc_retornar_faixa_guias( pnConvenio, 'RE', 'RI'||'@'||nEmpresa, sysdate, pvMsgErro);
+        if pvMsgErro is not null then
+          return 'ERRO:'||pvMsgErro;
+        end if;
+      else
+        vNrGuiaRI := vcConta.nr_guia_envio_principal;
+      end if;
+      --
+      insert into dbamv.tiss_nr_guia
+       ( cd_atendimento, cd_reg_fat, tp_guia, nr_guia, cd_prestador, cd_pro_fat, dt_lancamento, cd_multi_empresa,
+       nr_folha, nr_linha, cd_codigo_contratado, nr_guia_principal, cd_ati_med, tp_pagamento )
+         values( pnAtendimento, vcConta.cd_reg_fat, 'RI', vNrGuiaRI, null, '0', sysdate, nEmpresa,
+             1, 1, vContratado, vNrGuiaSolic, null, null );
+      --
+      if vcConta.nr_guia_envio_principal is null and vNrGuiaRI is not null then
+        --
+        update dbamv.atendime set nr_guia_envio_principal = vNrGuiaRI
+         where cd_atendimento = pnAtendimento and nr_guia_envio_principal is null;
+        --
+      update dbamv.reg_fat set nr_guia_envio_principal = vNrGuiaRI
+         where cd_reg_fat = vcConta.cd_reg_fat;
+        --
+      end if;
+      --
+    end if;
+    --
+    /* Loop para criar as guias em branco de SP/SADT e Honorário Individual.   */
+    for i in 1..10 loop
+      --
+        /* pda 274056 - 16/03/2009 - Amalia Araújo - Caso o nEmpresa seja 4 (alterado acima) só cria a guia de HI para a empresa 5. */
+      if nEmpresa = 4 then
+        --
+        vTpGuiaTiss   := 'HI';
+        nEmpresaFilha := 5;
+        --
+        vNrGuia := dbamv.pkg_ffcv_guia.fnc_retornar_faixa_guias( pnConvenio, 'RE', vTpGuiaTiss||'@'||nEmpresaFilha, sysdate, pvMsgErro);
+        if pvMsgErro is not null then
+          return 'ERRO:'||pvMsgErro;
+        end if;
+        --
+        insert into dbamv.tiss_nr_guia
+         ( cd_atendimento, cd_reg_fat, tp_guia, nr_guia, cd_prestador, cd_pro_fat, dt_lancamento, cd_multi_empresa,
+         nr_folha, nr_linha, cd_codigo_contratado, nr_guia_principal, cd_ati_med, tp_pagamento )
+           values( pnAtendimento, vcConta.cd_reg_fat, vTpGuiaTiss, vNrGuia, 0, '0', sysdate, nEmpresaFilha,
+               0, 0, vContratado, vNrGuiaSolic, null, null );
+        --
+        exit;
+        --
+      end if;
+      /* pda 274056 - fim */
+      --
+      /* Para a empresa 1 (Sta Joana) é impressa uma SP (4) e duas HI (4,5).
+       Para a empresa 2 (ProMatre) é impressa uma SP (4) e uma HI (4).       */
+      if ( nEmpresa = 1 and ( nCtlSP = 1 and nCtlHI = 2 ) ) or
+         ( nEmpresa = 2 and ( nCtlSP = 1 and nCtlHI = 1 ) ) then
+        exit;
+      end if;
+      --
+      if nCtlSP < 1 then
+        nCtlSP        := nCtlSP + 1;
+        vTpGuiaTiss   := 'SP';
+        nEmpresaFilha := 4;
+      else
+        nCtlHI := nCtlHI + 1;
+        vTpGuiaTiss := 'HI';
+        if nCtlHI = 1 then
+          nEmpresaFilha := 4;
+        else
+          nEmpresaFilha := 5;
+        end if;
+      end if;
+      --
+      vNrGuia := dbamv.pkg_ffcv_guia.fnc_retornar_faixa_guias( pnConvenio, 'RE', vTpGuiaTiss||'@'||nEmpresaFilha, sysdate, pvMsgErro);
+      if pvMsgErro is not null then
+        return 'ERRO:'||pvMsgErro;
+      end if;
+      --
+      insert into dbamv.tiss_nr_guia
+       ( cd_atendimento, cd_reg_fat, tp_guia, nr_guia, cd_prestador, cd_pro_fat, dt_lancamento, cd_multi_empresa,
+       nr_folha, nr_linha, cd_codigo_contratado, nr_guia_principal, cd_ati_med, tp_pagamento )
+         values( pnAtendimento, vcConta.cd_reg_fat, vTpGuiaTiss, vNrGuia, 0, '0', sysdate, nEmpresaFilha,
+             0, 0, vContratado, vNrGuiaSolic, null, null );
+      --
+    end loop;
+    --
+  end if;
+  --
+  return('OK');
+  --
+END FNC_FFCV_GERA_TISS_VAZIA_719;

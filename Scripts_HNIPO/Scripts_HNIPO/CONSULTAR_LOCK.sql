@@ -1,0 +1,62 @@
+select S1.INST_ID, nvl(S.USERNAME,'Internal') username
+ ,nvl(S.TERMINAL,'None') terminal
+    ,S.OsUser
+ ,L.SID||','||S.SERIAL# Kill
+ ,U1.NAME||'.'||substr(T1.NAME,1,20) tab
+    ,S.ACTION
+ ,decode(L.LMODE,1,'No Lock',
+  2,'Row Share',
+  3,'Row Exclusive',
+  4,'Share',
+  5,'Share Row Exclusive',
+  6,'Exclusive',null) lmode
+ ,decode(L.REQUEST,1,'No Lock',
+  2,'Row Share',
+  3,'Row Exclusive',
+  4,'Share',
+  5,'Share Row Exclusive',
+  6,'Exclusive',null) request
+    ,To_Char( Trunc(Sysdate) + L.CTime*( 1/(24*60*60) ), 'hh24:mi:ss' ) Tempo
+from V$LOCK L,
+ V$SESSION S,
+ GV$SESSION S1,
+ SYS.USER$ U1,
+ SYS.OBJ$ T1
+where L.SID = S.SID
+AND S1.SADDR = S.SADDR
+AND S1.SID = S.SID
+and T1.OBJ# = decode(L.ID2,0,L.ID1,L.ID2)
+and U1.USER# = T1.OWNER#
+and S.TYPE != 'BACKGROUND'
+--AND S.ACTION = 'M_LAN_HOS'
+--AND U1.NAME||'.'||substr(T1.NAME,1,20) = 'DBAMV.PRE_MED'
+order by l.ctime desc,1,2,6
+--alter system kill session '1969,40632'
+--
+/*alter system kill session '648,65020';
+alter system kill session '1271,14322';
+alter system kill session '2044,27018';
+alter system kill session '2153,21743';
+alter system kill session '162,1512';
+alter system kill session '2872,46649';
+alter system kill session '3996,6296';
+alter system kill session '315,35096';
+alter system kill session '3212,54123';
+alter system kill session '2906,21398';
+alter system kill session '3032,3657';
+alter system kill session '1417,9456';
+alter system kill session '1970,52996';
+alter system kill session '4740,11849';
+alter system kill session '344,7778';
+alter system kill session '1521,57755';
+alter system kill session '515,1304';
+alter system kill session '1539,54485';
+alter system kill session '3535,35689';
+alter system kill session '2316,2763';
+alter system kill session '4139,54586';
+*/
+
+
+
+
+--select * from dbamv.tb_aviso_cirurgia w

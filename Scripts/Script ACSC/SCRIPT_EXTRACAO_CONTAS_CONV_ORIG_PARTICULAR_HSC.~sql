@@ -1,0 +1,64 @@
+/*precisamos elaborar um estudo solicitado pela diretoria executiva, para isso precisamos extrair uma base consolidada com informações de faturamento e contas a receber.
+
+Critérios a serem considerados:
+
+Para lista de atendimentos em anexo, precisamos incluir as colunas:
+1 - soma do valor faturado convênio particular (40)
+2 - soma do valor faturado convênios (diferente de particular).
+3 - valor do titulo em aberto no financeiro (particular)
+
+*/
+with lista as (
+select 
+cd_atendimento,
+tp_atendimento
+from
+dbamv.atendime 
+where cd_atendimento in (2448218, 2585378, 2814781, 2865375, 3149243, 3312860, 3338439, 3352419, 3352444, 3359053, 3361306, 3393012, 3400893, 3416706, 
+3421083, 3435330, 3446543, 3462833, 3521196, 3549422, 3556489, 3582983, 3585159, 3592590, 3596342, 3596443, 3604709, 3618337, 
+3619339, 3640434, 3649605, 3671716, 3683111, 3693486, 3721387, 3721504, 3722585, 3736525, 3738577, 3740749, 3759591, 3766083, 
+3815171, 3819677, 3829005, 3831954, 3834358, 3842354, 3849856, 3851512, 3856714, 3876370, 3884811, 3893341, 3899688, 
+3903438, 3910312, 3910364, 3920959, 3940126, 3969779, 3977323, 3995889, 4003251, 4010281, 4032178, 4040209, 4040245, 4041487,
+ 4044007, 4050928, 4051976, 4056759, 4058735, 4066424, 4071355, 4071428, 4081254, 4081448, 4084173, 4084951, 4085335, 4098536,
+ 4105133, 4106271, 4112994, 4115563, 4115575, 4115600, 4127760, 4129110, 4129815, 4139458, 4146316, 4149168, 4159364, 4165337, 
+ 4167150, 4167346, 4169938, 4170315, 4171435, 4174555, 4174820, 4181118, 4184531, 4189014, 4189079, 4192108, 4193593, 4200154, 
+ 4203765, 4208434, 4212112, 4212298, 4212980, 4216087, 4218593, 4220729, 4221774, 4232414, 4238057, 4241403, 4242914, 4242983, 
+ 4244054, 4249496, 4251863, 4253681, 4253783, 4255699, 4269957, 4279426, 4280372, 4280431, 4287414, 4288190, 4295998, 4297288, 
+ 4297441, 4306962, 4311776, 4316505, 4320991, 4324499, 4329670, 4329742, 4330778, 4341217, 4347574, 4351530, 4353851, 4355411, 
+ 4357949, 4361921, 4369319, 4371611, 4372698, 4378182, 4382513, 4387052, 4391555, 4395643, 4395655, 4398003, 4404218, 4406867, 
+ 4417116, 4425627, 4425863, 4437237, 4438392, 4455683, 4463288, 4477612, 4499466, 4503135, 4503196, 4506158, 4531824, 4537625, 
+ 4556303, 4566843, 4574595, 4601068, 4608903, 4614382, 4621943, 4668003, 4718262, 4721028, 4733338, 4738470, 4745493, 4763357, 
+ 4769295, 4771764, 4777402, 4807764, 4813099, 4814426, 4820147, 4852300, 4853597, 40046743)
+)
+
+
+select 
+atd.dt_atendimento,
+atd.cd_atendimento,
+atd.cd_convenio||' - '||cvatd.nm_convenio conv_atend,
+rf.cd_convenio||' - '||cvct.nm_convenio conv_conta,
+rf.cd_reg_fat conta,
+decode(rf.sn_fechada,'S','Fechada','N','Aberta')STATUS_CONTA,
+nvl(rf.vl_total_conta,0)vl_total_conta,
+--cr.vl_previsto,
+irc.vl_duplicata vl_part_financ,
+case when irc.tp_quitacao = 'C' then 'Comprometido' 
+     when irc.tp_quitacao = 'Q' then 'Quitado'
+     end status_receb
+from 
+dbamv.atendime atd 
+inner join dbamv.reg_Fat rf on rf.cd_atendimento = atd.cd_atendimento
+inner join convenio cvatd on cvatd.cd_convenio = atd.cd_convenio
+inner join convenio cvct on cvct.cd_convenio = rf.cd_convenio
+inner join lista atds on atds.cd_Atendimento = atd.cd_atendimento
+left join  con_rec cr on cr.cd_reg_fat = rf.cd_reg_fat and cr.cd_atendimento = rf.cd_atendimento 
+and rf.cd_convenio = 40 
+left join itcon_rec irc on irc.cd_con_rec = cr.cd_con_rec
+where 1 =1 --atd.cd_atendimento = 2448218
+order by atd.cd_atendimento
+
+/*group by cd_Atendimento
+;*/
+
+/*select * from con_rec c
+where c.cd_atendimento = 2448218*/

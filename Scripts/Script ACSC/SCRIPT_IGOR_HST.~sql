@@ -1,0 +1,32 @@
+select 
+atd.cd_atendimento,
+rf.cd_reg_fat,
+conv.cd_convenio,
+conv.nm_convenio,
+pd.cd_produto,
+pd.ds_produto,
+irf.cd_pro_fat,
+pf.ds_pro_fat,
+gp.cd_gru_pro,
+gp.ds_gru_pro,
+IRF.DT_LANCAMENTO,
+IRF.HR_LANCAMENTO,
+irf.qt_lancamento,
+irf.vl_unitario,
+irf.vl_total_conta,
+irf.sn_pertence_pacote
+from 
+dbamv.gru_pro gp 
+inner join pro_Fat pf on pf.cd_gru_pro = gp.cd_gru_pro
+inner join produto pd on pd.cd_pro_fat = pf.cd_pro_fat
+inner join empresa_produto epd on epd.cd_produto = pd.cd_produto and epd.cd_multi_empresa = 4 
+inner join itreg_fat irf on irf.cd_pro_fat = pf.cd_pro_fat
+inner join reg_fat rf on rf.cd_reg_fat = irf.cd_reg_fat 
+inner join atendime atd on atd.cd_atendimento = rf.cd_atendimento
+inner join convenio conv on conv.cd_convenio = atd.cd_convenio and conv.sn_ativo = 'S' 
+and conv.tp_convenio in ('C')
+and conv.cd_convenio in (152)
+--and irf.cd_pro_fat = '00001786'
+WHERE (to_date(irf.dt_lancamento, 'dd/mm/rrrr') between '01/01/2023' and '01/11/2023'
+AND(gp.ds_gru_pro LIKE '%MATERI%'OR gp.ds_gru_pro LIKE '%MEDICA%'OR gp.ds_gru_pro LIKE '%ORTESES%'))
+order by irf.

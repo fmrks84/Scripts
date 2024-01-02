@@ -1,0 +1,4336 @@
+--PROMPT CREATE OR REPLACE PACKAGE dbamv.pkg_ffcv_retorno_tiss
+CREATE OR REPLACE PACKAGE dbamv.pkg_ffcv_retorno_tiss AS
+
+  --
+  -- Rotina de Apurao do Retorno do Demonstrativo de Anlise de Contas do TISS 3.02.01
+  -- Saulo Rocha, em 25/05/2015
+  --
+  -- TELA 21
+  -- 03/12/2015
+  --
+
+-- Nova rotina de apuração
+    TYPE recDadosApuracao IS RECORD ( CD_MULTI_EMPRESA NUMBER,
+                                      ID_MSG_ORIGEM    NUMBER,
+                                      CD_CONVENIO      NUMBER,
+                                      CD_FINAN_RECEB   NUMBER,
+                                      CD_NOTA_FISCAL   NUMBER,
+                                      SN_CONSIDERA_NF  VARCHAR(1),
+                                      CD_MOTIVO_GLOSA  NUMBER,
+                                      CD_REMESSA       NUMBER,
+                                      CD_REMESSA_GLOSA NUMBER,
+                                      NR_LOTE          VARCHAR2(20),
+                                      NR_PROTOCOLO     VARCHAR2(20),
+                                      ID_DAC           NUMBER,
+                                      ID_DLT           NUMBER,
+                                      ID_DCG           NUMBER,
+                                      ID_DCI           NUMBER,
+                                      VL_DECLARADO     NUMBER,
+                                      VL_DEC_GLOSA     NUMBER,
+                                      VL_DEC_LIBERADO  NUMBER,
+                                      VL_LIBERADO      NUMBER,
+                                      VL_GLOSADO       NUMBER,
+                                      VL_ACRESCIMO     NUMBER,
+                                      VL_INVALIDO      NUMBER,
+									  VL_INFORMADO     NUMBER,
+                                      MSG_ERRO         VARCHAR2(2000));
+
+  FUNCTION FNC_DAC_APURA_LOTE(pIdMsgLoteEnvio IN NUMBER
+	  						             ,tDadosApuracao OUT recDadosApuracao) RETURN BOOLEAN;
+
+  FUNCTION F_DADO_GLOSA(P_ID_PROC IN NUMBER, P_ID_GLOSA IN NUMBER,P_TIPO_RETORNO IN VARCHAR2) RETURN VARCHAR2;
+
+  FUNCTION F_DAC_DIF_LIB(pnCdItFatNF IN NUMBER) RETURN NUMBER;
+
+  FUNCTION F_TP_ANALISE_RETORNO(P_ID_GUIA NUMBER) RETURN VARCHAR2;
+  PROCEDURE P_DAC_CONCILIA_ITEM( P_MSG_ENVIO IN NUMBER, P_FORCA BOOLEAN, pMSG_ERRO OUT VARCHAR2);
+  PROCEDURE P_DAC_APURA_CONCILIADO2(tDadosApuracao IN OUT recDadosApuracao, pMSG_ERRO OUT VARCHAR2);
+  PROCEDURE P_DAC_LIMPA_HISTORICO(tDadosApuracao IN recDadosApuracao, pMSG_ERRO OUT VARCHAR2);
+  PROCEDURE PRC_DAC_APURA_LOTE(pIdMsgLoteEnvio NUMBER, pDetalhe OUT VARCHAR2, pMSG_ERRO OUT VARCHAR2);
+
+  TYPE tpFinanReceb IS RECORD (
+    CD_FINAN_RECEB    NUMBER,
+    CD_NOTA_FISCAL    NUMBER,
+    CD_CON_REC        NUMBER,
+    CD_ITCON_REC      NUMBER,
+    CD_RECCON_REC     NUMBER,
+    CD_CONVENIO       NUMBER,
+    CD_USUARIO_IMPO   VARCHAR2(30),
+    CD_USUARIO_RECB   VARCHAR2(30),
+    DT_IMPORTACAO     NUMBER,
+    DT_RECEBIMENTO    DATE,
+    VL_INFORMADO      NUMBER,
+    VL_PROCESSADO     NUMBER,
+    VL_GLOSADO        NUMBER,
+    VL_DESCONTO       NUMBER,
+    VL_ACRESCIMO      NUMBER,
+    VL_IMPOSTO        NUMBER,
+    VL_LIBERADO       NUMBER,
+    VL_INVALIDO       NUMBER,
+    CD_EMPRESA_LOGADA NUMBER,
+    CD_REMESSA        NUMBER,
+    CD_REMESSA_GLOSA  NUMBER,
+    NR_LOTE           NUMBER,
+    NR_PROTOCOLO      VARCHAR2(20),
+    TP_ORIGEM         VARCHAR2(100),
+    CD_ORIGEM         VARCHAR2(100)
+  );
+
+  TYPE tpFinanRecebItem IS RECORD (
+    CD_FINAN_RECEB_ITEM NUMBER,
+    CD_FINAN_RECEB NUMBER,
+    CD_ORIGEM_ITEM NUMBER,
+    CD_ORIGEM NUMBER,
+    CD_ITFAT_NF NUMBER,
+    CD_REMESSA NUMBER,
+    CD_PROCEDIMENTO NUMBER,
+    VL_INFORMADO NUMBER,
+    VL_PROCESSADO NUMBER,
+    VL_IMPOSTO NUMBER,
+    VL_LIBERADO NUMBER,
+    VL_GLOSA NUMBER,
+    VL_ACRESCIMO NUMBER,
+    VL_DESCONTO NUMBER,
+    VL_INVALIDO NUMBER,
+    CD_MOTIVO_1 NUMBER,
+    CD_MOTIVO_2 NUMBER,
+    CD_MOTIVO_3 NUMBER,
+	DS_FALHA varchar2 (200),
+	CD_REG_FAT NUMBER,
+    CD_LANCAMENTO_FAT NUMBER,
+    CD_REG_AMB NUMBER,
+    CD_LANCAMENTO_AMB NUMBER
+  );
+
+  FUNCTION F_DAC_DADOS_FINAN_RECEB(tFinanReceb IN OUT tpFinanReceb,tDadosApuracao IN OUT recDadosApuracao) RETURN NUMBER;
+
+	CURSOR C_NOTA_FISCAL(P_CD_REMESSA NUMBER) IS
+		SELECT NF.CD_NOTA_FISCAL
+				 , NF.NR_ID_NOTA_FISCAL
+		FROM DBAMV.NOTA_FISCAL NF,
+			(SELECT DISTINCT CD_NOTA_FISCAL
+				FROM DBAMV.ITFAT_NOTA_FISCAL
+				WHERE CD_REMESSA =  P_CD_REMESSA
+			GROUP BY CD_NOTA_FISCAL) ITF
+		WHERE ITF.CD_NOTA_FISCAL = NF.CD_NOTA_FISCAL;
+
+	CURSOR C_LOTE_ENVIO(P_ID_TRANSACAO_ENVIO NUMBER) IS
+		SELECT LOTE.NR_LOTE
+				, NVL(REMESSA_FILHA.CD_REMESSA,NVL(TISS_GUIA.CD_REMESSA,LOTE.NR_DOCUMENTO)) CD_REMESSA
+				, TISS_GUIA.CD_REMESSA_GLOSA
+        , lote.NR_PROTOCOLO_RETORNO
+        , lote.NR_REGISTRO_ANS_DESTINO
+				, SUM (TO_NUMBER( TISS_IT.VL_TOTAL, '999999999999999.99' )) VL_TOTAL_LOTE
+			 FROM DBAMV.TISS_GUIA,
+						(SELECT DISTINCT TL.ID_PAI ID_ENVIO, ITF.CD_REMESSA
+						   FROM DBAMV.ITFAT_NOTA_FISCAL ITF, DBAMV.TISS_LOTE TL, DBAMV.TISS_GUIA TG, DBAMV.TISS_ITGUIA TIT
+							WHERE TL.ID_PAI = P_ID_TRANSACAO_ENVIO
+							  AND TG.ID_PAI = TL.ID
+							  AND TIT.ID_PAI = TG.ID
+							  AND ITF.ID_IT_ENVIO = TIT.ID) REMESSA_FILHA,
+						(SELECT	ID_PAI
+									,	VL_TOTAL
+							 FROM DBAMV.TISS_ITGUIA
+						  WHERE NVL(TP_PAGAMENTO,'P') <> 'C'
+						  UNION ALL
+					 SELECT ID_PAI
+									,	VL_TOTAL
+							 FROM DBAMV.TISS_ITGUIA_OUT
+				  UNION ALL
+				   SELECT ID
+									,	VL_PROCEDIMENTO_CO
+							 FROM DBAMV.TISS_GUIA
+						  WHERE CD_PROCEDIMENTO_CO IS NOT NULL) TISS_IT,
+						(SELECT NVL(TLG.ID,TL.ID) TL_ID
+							, TL.NR_LOTE
+						, TL.ID_PAI
+						, TM.NR_DOCUMENTO
+            , TM.NR_PROTOCOLO_RETORNO
+            , TM.NR_REGISTRO_ANS_DESTINO
+						 FROM DBAMV.TISS_LOTE				TL
+							, DBAMV.TISS_MENSAGEM 	TM
+							,	DBAMV.TISS_LOTE_GUIA 	TLG
+					  WHERE TM.ID			= P_ID_TRANSACAO_ENVIO
+						  AND TL.ID_PAI = TM.ID
+							AND TLG.ID_PAI(+)	=	TL.ID) LOTE
+				WHERE TISS_GUIA.ID_PAI 	= LOTE.TL_ID
+				AND TISS_IT.ID_PAI 		= TISS_GUIA.ID
+				AND REMESSA_FILHA.ID_ENVIO(+) = LOTE.ID_PAI
+			  GROUP BY LOTE.NR_LOTE
+							, NVL(REMESSA_FILHA.CD_REMESSA,NVL(TISS_GUIA.CD_REMESSA,LOTE.NR_DOCUMENTO))
+							, TISS_GUIA.CD_REMESSA_GLOSA, lote.NR_PROTOCOLO_RETORNO ,lote.NR_REGISTRO_ANS_DESTINO;
+
+	CURSOR C_LOTE_RETORNO(P_CD_CONVENIO NUMBER, P_NR_LOTE VARCHAR2, P_ID_TRANSACAO NUMBER, P_CD_REMESSA NUMBER) IS
+		SELECT TDL.ID_MENSAGEM_ENVIO
+					, TME.NR_DOCUMENTO	CD_REMESSA
+					, TDL.NR_LOTE
+					, TM.NR_PROTOCOLO_RETORNO
+					, TM.ID	  	ID_TM_DD
+					, TDC.ID		ID_TDC
+					, TDL.ID		ID_TLD
+					, TO_NUMBER(TDL.VL_PROTOCOLO,'999999999999.99') VL_PROTOCOLO
+					, TO_NUMBER(TDL.VL_INFORMADO_PROTOCOLO,'999999999999.99') VL_INFORMADO_PROTOCOLO
+					, TO_NUMBER(TDL.VL_GLOSA,'999999999999.99') VL_GLOSA
+					, TM.CD_VERSAO
+					, TDL.DT_PROCESSADO
+					, TDL.CD_USUARIO_PROCESSOU
+			FROM  DBAMV.TISS_MENSAGEM TM
+    	 		, DBAMV.TISS_RETORNO_DEMON_CONTA TDC
+    	 		, DBAMV.TISS_RETORNO_DEMON_CONTA_LOTE TDL
+    	 		, DBAMV.TISS_MENSAGEM TME
+			WHERE TM.ID						=	NVL(P_ID_TRANSACAO,TM.ID)
+  	  	AND TM.ID						=	TDC.ID_PAI
+  	  	AND TM.TP_TRANSACAO	=	'DEMONSTRATIVO_ANALISE_CONTA'
+  	  	AND NVL(TM.CD_STATUS,'PS')		<>	'CA'
+  	  	AND TDC.ID          = 	TDL.ID_PAI
+  	  	AND TDC.CD_CONVENIO	= 	P_CD_CONVENIO
+  	  	AND LPAD(TDL.NR_LOTE, 20, '0')     = 	LPAD(NVL(P_NR_LOTE,TDL.NR_LOTE), 20, '0')
+  	  	AND TME.ID = TDL.ID_MENSAGEM_ENVIO
+  	  	AND TO_NUMBER(TME.NR_DOCUMENTO) = P_CD_REMESSA
+  	 ORDER BY TM.ID DESC;
+     R_LOTE_RETORNO C_LOTE_RETORNO%ROWTYPE;
+     R_LOTE_ENVIO        C_LOTE_ENVIO%ROWTYPE;
+
+    Cursor cCONCILIADO(P_CD_REMESSA_LOTE IN NUMBER, P_CD_REMESSA_GLOSA_LOTE IN NUMBER, P_ID_TLD IN NUMBER, P_NR_LOTE IN VARCHAR2) is
+       SELECT TIPO
+			      , QR.ID_RETORNO_PROC
+			      , QR.ID_RETORNO_GUIA
+			      , QR.VL_PROCESSADO 	VL_PROCESSADO_PROC
+			      , QR.VL_LIBERADO   	VL_LIBERADO_PROC
+			      , QR.VL_GLOSADO		VL_GLOSADO_PROC
+			      , QR.QT_EXECUTADA_PROC
+			      , QR.CD_REMESSA
+			      , QR.CD_REMESSA_GLOSA
+			      , QR.CD_ITFAT_NF
+			      , QR.CD_GLOSAS
+			      , QR.CD_ATENDIMENTO
+			      , QR.CD_REG_FAT
+			      , QR.CD_REG_AMB
+			      , QR.CD_PRO_FAT
+			      , QR.VL_ITFAT_NF
+			      , QR.QT_ITFAT_NF
+			      , QR.CD_LANCAMENTO_FAT
+			      , QR.CD_LANCAMENTO_AMB
+			      , QR.CD_PRESTADOR
+			      , QR.CD_ATI_MED
+			      , QR.ID_IT_ENVIO
+			      , NVL(QR.VL_LIBERADO, 0) VL_LIBERADO_CONC
+			      , NVL(QR.VL_PROCESSADO, 0) VL_PROCESSADO_CONC
+			      , NVL(NVL(QR.VL_GLOSA_DIF, QR.VL_GLOSADO), 0) VL_GLOSADO_CONC
+			      , QTDE_ITENS_AGRUP
+			      , QR.VL_AGRUP
+			      , QR.VL_GLOSA_DIF
+			      , QR.VL_INFORMADO
+				    , DS_OBSERVACAO_IMPORTACAO
+			FROM (SELECT 'GERAL' TIPO
+			           , CPROC.ID ID_RETORNO_PROC
+				         , CGUIA.ID ID_RETORNO_GUIA
+			           , TO_NUMBER(NVL(CPROC.VL_PROCESSADO,'0'),'99999999999999.99') VL_PROCESSADO
+			           , TO_NUMBER(NVL(CPROC.VL_LIBERADO,'0'),'99999999999999.99') VL_LIBERADO
+			           , DECODE( SIGN(  NVL(ITFAT.VL_ITFAT_NF, 0) - TO_NUMBER(  NVL(CPROC.VL_LIBERADO,'0') ,'99999999999999.99' )  ),-1,0,NVL(ITFAT.VL_ITFAT_NF, 0) - TO_NUMBER(NVL(CPROC.VL_LIBERADO,'0'),'99999999999999.99')) VL_GLOSADO
+			           , CPROC.QT_EXECUTADA 																 	QT_EXECUTADA_PROC
+			           , ITFAT.CD_REMESSA
+			           , ITFAT.CD_REMESSA_GLOSA
+			           , ITFAT.CD_ITFAT_NF
+			           , ITFAT.CD_GLOSAS
+			           , ITFAT.CD_ATENDIMENTO
+			           , ITFAT.CD_REG_FAT
+			           , ITFAT.CD_REG_AMB
+			           , ITFAT.CD_PRO_FAT
+			           , ITFAT.VL_ITFAT_NF
+			           , ITFAT.QT_ITFAT_NF
+			           , ITFAT.CD_LANCAMENTO_FAT
+			           , ITFAT.CD_LANCAMENTO_AMB
+			           , ITFAT.CD_PRESTADOR
+			           , ITFAT.CD_ATI_MED
+			           , ITFAT.ID_IT_ENVIO
+			           , AGRUP.QTDE_ITENS    QTDE_ITENS_AGRUP
+			           , AGRUP.VL_AGRUPADO   VL_AGRUP
+			           , DECODE(NVL(TO_NUMBER(NVL(CPROC.VL_GLOSADO,'0'),'99999999999999.99'),0),0,DECODE(SIGN(TO_NUMBER(CPROC.VL_INFORMADO,'99999999999999.99')-TO_NUMBER(CPROC.VL_LIBERADO,'99999999999999.99'))
+			                    ,1,TO_NUMBER(CPROC.VL_INFORMADO,'99999999999999.99')-TO_NUMBER(CPROC.VL_LIBERADO,'99999999999999.99'),NULL)) VL_GLOSA_DIF
+			           , DECODE(CPROC.VL_INFORMADO,NULL,TO_NUMBER(NULL),TO_NUMBER(CPROC.VL_INFORMADO,'9999990.00')) VL_INFORMADO
+			           , DBAMV.PKG_TISS_UTIL.F_CONC_GLOSA_AGP(ITFAT.ID_IT_ENVIO,ITFAT.CD_ITFAT_NF) SN_GLOSA_AGRUP
+					       , CPROC.DS_OBSERVACAO_IMPORTACAO
+			      FROM  DBAMV.TISS_RETORNO_DEMON_CONTA       CTA
+			          , DBAMV.TISS_RETORNO_DEMON_CONTA_LOTE 	CLOTE
+			          , DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA 	CGUIA
+			          , DBAMV.TISS_RETORNO_DEMON_CONTA_PROC 	CPROC
+			          , DBAMV.TISS_GUIA TG
+			          , ( SELECT CD_REMESSA, TO_NUMBER(NULL) CD_REMESSA_GLOSA, CD_ITFAT_NF, TO_NUMBER(NULL) CD_GLOSAS, CD_ATENDIMENTO, CD_REG_FAT, CD_REG_AMB, CD_PRO_FAT
+			                   , VL_ITFAT_NF, QT_ITFAT_NF, CD_LANCAMENTO_FAT, CD_LANCAMENTO_AMB, CD_PRESTADOR, CD_ATI_MED, ID_IT_ENVIO
+			                FROM DBAMV.ITFAT_NOTA_FISCAL
+			               WHERE P_CD_REMESSA_GLOSA_LOTE IS NULL
+			                 AND CD_REMESSA = P_CD_REMESSA_LOTE
+			               UNION ALL
+			              SELECT TO_NUMBER(P_CD_REMESSA_LOTE) CD_REMESSA, CD_REMESSA_GLOSA, TO_NUMBER(NULL) CD_ITFAT_NF, CD_GLOSAS, CD_ATENDIMENTO, CD_REG_FAT, CD_REG_AMB, CD_PRO_FAT
+			                   , VL_REAPRESENTADO VL_ITFAT_NF, QT_REAPRESENTADA QT_ITFAT_NF, CD_LANCAMENTO_FAT, CD_LANCAMENTO_AMB, CD_PRESTADOR, CD_ATI_MED, ID_IT_ENVIO
+			                FROM DBAMV.GLOSAS
+			               WHERE P_CD_REMESSA_GLOSA_LOTE IS NOT NULL
+			                 AND CD_REMESSA_GLOSA = P_CD_REMESSA_GLOSA_LOTE  ) ITFAT
+			          , (SELECT COUNT(CD_ITFAT_NF) QTDE_ITENS, SUM(VL_ITFAT_NF) VL_AGRUPADO, ID_IT_ENVIO
+			               FROM DBAMV.ITFAT_NOTA_FISCAL
+			              WHERE CD_REMESSA = P_CD_REMESSA_LOTE
+			              GROUP BY ID_IT_ENVIO) AGRUP
+			     WHERE CLOTE.ID    					= P_ID_TLD
+                   AND 'GERAL' = DBAMV.pkg_ffcv_retorno_tiss.F_TP_ANALISE_RETORNO(CLOTE.ID)
+
+			       AND LPAD(CLOTE.NR_LOTE, 20, '0') 	= LPAD(P_NR_LOTE, 20, '0')
+			       AND CTA.ID						= CLOTE.ID_PAI
+			       AND CGUIA.ID_PAI					= CLOTE.ID
+			       AND ( CGUIA.CD_STATUS_GUIA in ('6','4')
+			             OR (CGUIA.CD_STATUS_GUIA = '3' AND CGUIA.VL_GLOSA_GUIA = CGUIA.VL_INFORMADO_GUIA))
+			       AND NOT EXISTS (SELECT 'X'
+			                         FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PROC DP1, DBAMV.ITFAT_NOTA_FISCAL ITF2, DBAMV.IT_RECEBIMENTO IR
+			                        WHERE DP1.ID_PAI       = CGUIA.ID
+			                          AND ITF2.CD_REMESSA  = P_CD_REMESSA_LOTE
+			                          AND ITF2.ID_IT_ENVIO = DP1.ID_IT_ENVIO
+			                          AND IR.CD_ITFAT_NF   = ITF2.CD_ITFAT_NF
+                                AND IR.CD_ITFAT_NF = ITFAT.CD_ITFAT_NF)
+			       AND CPROC.ID_PAI  = CGUIA.ID
+			       AND TG.ID         =  CGUIA.ID_GUIA_ENVIO
+			       AND TG.NM_XML    <> 'guiaConsulta'
+			       AND ITFAT.ID_IT_ENVIO(+)	= CPROC.ID_IT_ENVIO
+			       AND AGRUP.ID_IT_ENVIO(+) 	= CPROC.ID_IT_ENVIO
+             -- Retirando as glosas
+			       AND CGUIA.VL_GLOSA_GUIA <> CGUIA.VL_INFORMADO_GUIA --saulo
+
+			     UNION ALL
+			    SELECT 'QUITADAS' TIPO
+			          , NULL      ID_RETORNO_PROC
+			          , NULL      ID_RETORNO_GUIA
+			          , ITF.VL_ITFAT_NF  VL_PROCESSADO
+			          , ITF.VL_ITFAT_NF  VL_LIBERADO
+			          , 0                VL_GLOSADO
+			          , TO_CHAR(ITF.QT_ITFAT_NF)	QT_EXECUTADA_PROC
+			          , ITF.CD_REMESSA
+			          , NULL CD_REMESSA_GLOSA
+			          , ITF.CD_ITFAT_NF
+			          , NULL CD_GLOSAS
+			          , ITF.CD_ATENDIMENTO
+			          , ITF.CD_REG_FAT
+			          , ITF.CD_REG_AMB
+			          , ITF.CD_PRO_FAT
+			          , ITF.VL_ITFAT_NF
+			          , ITF.QT_ITFAT_NF
+			          , ITF.CD_LANCAMENTO_FAT
+			          , ITF.CD_LANCAMENTO_AMB
+			          , ITF.CD_PRESTADOR
+			          , ITF.CD_ATI_MED
+			          , ITF.ID_IT_ENVIO
+			          , ITF.QT_ITFAT_NF  QTDE_ITENS_AGRUP
+			          , ITF.VL_ITFAT_NF  VL_AGRUP
+			          , 0                VL_GLOSA_DIF
+			          , TO_NUMBER(NULL)  VL_INFORMADO
+			          , 'X'              SN_GLOSA_AGRUP
+                , NULL DS_OBSERVACAO_IMPORTACAO
+			      FROM DBAMV.ITFAT_NOTA_FISCAL ITF
+			     WHERE ITF.CD_REMESSA = P_CD_REMESSA_LOTE
+             AND 'QUITADAS' = DBAMV.pkg_ffcv_retorno_tiss.F_TP_ANALISE_RETORNO(0)
+                          AND (itf.CD_REG_AMB IN (SELECT CD_REG_AMB FROM dbamv.TISS_RETORNO_DEMON_CONTA_GUIA WHERE ID_PAI = P_ID_TLD AND TO_NUMBER(NVL(VL_INFORMADO_GUIA,'0'),'9999990.00') = TO_NUMBER(NVL(VL_LIBERADO_GUIA,'0'),'9999990.00'))
+                            OR itf.CD_REG_FAT IN (SELECT CD_REG_FAT FROM dbamv.TISS_RETORNO_DEMON_CONTA_GUIA WHERE ID_PAI = P_ID_TLD AND TO_NUMBER(NVL(VL_INFORMADO_GUIA,'0'),'9999990.00') = TO_NUMBER(NVL(VL_LIBERADO_GUIA,'0'),'9999990.00')))
+			       AND NOT EXISTS (SELECT 'X' FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PROC TR WHERE TR.ID_IT_ENVIO = ITF.ID_IT_ENVIO)
+             AND NOT EXISTS (SELECT 'X' FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PROC TR WHERE TR.ID_IT_ENVIO IS NULL ) --saulo
+			       AND NOT EXISTS (SELECT 'X'
+			                         FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PROC TR, DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA TG
+			                        WHERE TR.ID_PAI = TG.ID AND TG.ID_PAI = P_ID_TLD
+			                          AND TR.ID_IT_ENVIO IS NULL AND TR.DS_OBSERVACAO_IMPORTACAO IS NOT NULL
+			                          AND TO_NUMBER(NVL(NVL(TR.VL_INFORMADO,TR.VL_PROCESSADO),'0'),'9999990.00')=(SELECT TO_NUMBER(TIG.VL_TOTAL,'9999990.00') FROM DBAMV.TISS_ITGUIA TIG WHERE TIG.ID = ITF.ID_IT_ENVIO
+			                                                                                                       UNION ALL
+			                                                                                                       SELECT TO_NUMBER(TIO.VL_TOTAL,'9999990.00') FROM DBAMV.TISS_ITGUIA_OUT TIO WHERE TIO.ID = ITF.ID_IT_ENVIO))
+			       AND EXISTS (SELECT 'X'
+			                     FROM DBAMV.TISS_GUIA TG, DBAMV.TISS_LOTE TL, DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA TGR
+			                    WHERE LPAD(TL.NR_LOTE, 20, '0')  = LPAD(P_NR_LOTE, 20, '0')
+			                      AND TG.ID_PAI  = TL.ID
+			                      AND TGR.ID_PAI = P_ID_TLD
+			                      AND TGR.ID_GUIA_ENVIO = TG.ID
+			                      AND TGR.CD_STATUS_GUIA IN ('6','4')
+                            AND TG.NM_XML    <> 'guiaConsulta'
+			                      AND NOT EXISTS (SELECT 'X'
+			                                        FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PROC DP1, DBAMV.ITFAT_NOTA_FISCAL ITF2, DBAMV.IT_RECEBIMENTO IR
+			                                       WHERE DP1.ID_PAI = TGR.ID
+			                                         AND ITF2.CD_REMESSA = P_CD_REMESSA_LOTE
+			                                         AND ITF2.ID_IT_ENVIO = DP1.ID_IT_ENVIO
+			                                         AND IR.CD_ITFAT_NF = ITF2.CD_ITFAT_NF
+                                               AND IR.CD_ITFAT_NF = ITF.CD_ITFAT_NF)
+
+			                      AND TO_NUMBER(NVL(TGR.VL_INFORMADO_GUIA,'0'),'9999990.00') = TO_NUMBER(NVL(TGR.VL_LIBERADO_GUIA,'0'),'9999990.00')
+			                      /*AND TG.ID = (SELECT ID_PAI FROM DBAMV.TISS_ITGUIA TIG WHERE TIG.ID = ITF.ID_IT_ENVIO
+			                                    UNION ALL
+			                                   SELECT ID_PAI FROM DBAMV.TISS_ITGUIA_OUT TIO WHERE TIO.ID = ITF.ID_IT_ENVIO )*/)
+			     UNION ALL
+			    SELECT 'CONSULTAS' TIPO
+			         , ITFR.ID     ID_RETORNO_PROC
+			         , TGR.ID      ID_RETORNO_GUIA
+			         , TO_NUMBER(NVL(TGR.VL_PROCESSADO_GUIA,'0'),'99999999999999.99')  VL_PROCESSADO
+			         , TO_NUMBER(NVL(TGR.VL_LIBERADO_GUIA,'0'),'99999999999999.99')    VL_LIBERADO
+			         , TO_NUMBER(NVL(TGR.VL_GLOSA_GUIA,'0'),'99999999999999.99')       VL_GLOSADO
+			         , TO_CHAR(NVL(ITF.QT_ITFAT_NF,1))                                 QT_EXECUTADA_PROC
+			         , ITF.CD_REMESSA
+			         , NULL CD_REMESSA_GLOSA
+			         , ITF.CD_ITFAT_NF
+			         , NULL CD_GLOSAS
+			         , ITF.CD_ATENDIMENTO
+			         , ITF.CD_REG_FAT
+			         , ITF.CD_REG_AMB
+			         , ITF.CD_PRO_FAT
+			         , ITF.VL_ITFAT_NF
+			         , ITF.QT_ITFAT_NF
+			         , ITF.CD_LANCAMENTO_FAT
+			         , ITF.CD_LANCAMENTO_AMB
+			         , ITF.CD_PRESTADOR
+			         , ITF.CD_ATI_MED
+			         , ITF.ID_IT_ENVIO
+			         , NVL(ITF.QT_ITFAT_NF,1)                                                            QTDE_ITENS_AGRUP
+			         , NVL(ITF.VL_ITFAT_NF,TO_NUMBER(NVL(TGR.VL_LIBERADO_GUIA,'0'),'99999999999999.99')) VL_AGRUP
+			         , TO_NUMBER(NULL)                                                                   VL_GLOSA_DIF
+			         , TO_NUMBER(NVL(TGR.VL_INFORMADO_GUIA,'0'),'99999999999999.99')				        VL_INFORMADO
+			         , 'X'                         SN_GLOSA_AGRUP
+					     , ITFR.DS_OBSERVACAO_IMPORTACAO
+			     FROM DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA TGR, DBAMV.TISS_GUIA TG, DBAMV.ITFAT_NOTA_FISCAL ITF, DBAMV.TISS_RETORNO_DEMON_CONTA_PROC ITFR
+			    WHERE TGR.ID_PAI = P_ID_TLD
+            AND 'CONSULTAS' = DBAMV.pkg_ffcv_retorno_tiss.F_TP_ANALISE_RETORNO(-1)
+			      AND TGR.CD_STATUS_GUIA IN ('6','4')
+			      AND NOT EXISTS (SELECT 'X'
+			                        FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PROC DP1, DBAMV.ITFAT_NOTA_FISCAL ITF2, DBAMV.IT_RECEBIMENTO IR
+			                       WHERE DP1.ID_PAI = TGR.ID
+			                         AND ITF2.CD_REMESSA = P_CD_REMESSA_LOTE
+			                         AND ITF2.ID_IT_ENVIO = DP1.ID_IT_ENVIO
+			                         AND IR.CD_ITFAT_NF = ITF2.CD_ITFAT_NF
+                               AND IR.CD_ITFAT_NF = ITF.CD_ITFAT_NF)
+
+			      AND TG.ID = TGR.ID_GUIA_ENVIO
+			      AND TG.NM_XML = 'guiaConsulta'
+			      AND ITF.CD_ATENDIMENTO(+) = TG.CD_ATENDIMENTO
+			      AND ITF.CD_REMESSA = P_CD_REMESSA_LOTE
+			      AND ITFR.ID_PAI(+) = TGR.ID
+			     UNION ALL
+             /* SOMENTE GLOSAS NO RETORNO - a diferena que foi paga (ITFAT_NOTA_FISCAL sem Glosas) */
+            	           SELECT 'SO_GLOSAS1' TIPO
+            				           , CPROC.ID ID_RETORNO_PROC
+            					         , CGUIA.ID ID_RETORNO_GUIA
+            				           , TO_NUMBER(NVL(CPROC.VL_PROCESSADO,'0'),'99999999999999.99') VL_PROCESSADO
+            				           , TO_NUMBER(NVL(CPROC.VL_LIBERADO,'0'),'99999999999999.99') VL_LIBERADO
+            				           , DECODE( SIGN(  NVL(ITFAT.VL_ITFAT_NF, 0) - TO_NUMBER(  NVL(CPROC.VL_LIBERADO,'0') ,'99999999999999.99' )  ),-1,0,NVL(ITFAT.VL_ITFAT_NF, 0) - TO_NUMBER(NVL(CPROC.VL_LIBERADO,'0'),'99999999999999.99')) VL_GLOSADO
+            				           , CPROC.QT_EXECUTADA 																 	QT_EXECUTADA_PROC
+            				           , ITFAT.CD_REMESSA
+            				           , ITFAT.CD_REMESSA_GLOSA
+            				           , ITFAT.CD_ITFAT_NF
+            				           , ITFAT.CD_GLOSAS
+            				           , ITFAT.CD_ATENDIMENTO
+            				           , ITFAT.CD_REG_FAT
+            				           , ITFAT.CD_REG_AMB
+            				           , ITFAT.CD_PRO_FAT
+            				           , ITFAT.VL_ITFAT_NF
+            				           , ITFAT.QT_ITFAT_NF
+            				           , ITFAT.CD_LANCAMENTO_FAT
+            				           , ITFAT.CD_LANCAMENTO_AMB
+            				           , ITFAT.CD_PRESTADOR
+            				           , ITFAT.CD_ATI_MED
+            				           , ITFAT.ID_IT_ENVIO
+            				           , AGRUP.QTDE_ITENS    QTDE_ITENS_AGRUP
+            				           , AGRUP.VL_AGRUPADO   VL_AGRUP
+            				           , DECODE(NVL(TO_NUMBER(NVL(CPROC.VL_GLOSADO,'0'),'99999999999999.99'),0),0,DECODE(SIGN(TO_NUMBER(CPROC.VL_INFORMADO,'99999999999999.99')-TO_NUMBER(CPROC.VL_LIBERADO,'99999999999999.99'))
+            				                    ,1,TO_NUMBER(CPROC.VL_INFORMADO,'99999999999999.99')-TO_NUMBER(CPROC.VL_LIBERADO,'99999999999999.99'),NULL)) VL_GLOSA_DIF
+            				           , DECODE(CPROC.VL_INFORMADO,NULL,TO_NUMBER(NULL),TO_NUMBER(CPROC.VL_INFORMADO,'9999990.00')) VL_INFORMADO
+            				           , DBAMV.PKG_TISS_UTIL.F_CONC_GLOSA_AGP(ITFAT.ID_IT_ENVIO,ITFAT.CD_ITFAT_NF) SN_GLOSA_AGRUP
+									             , CPROC.DS_OBSERVACAO_IMPORTACAO
+            				      FROM  DBAMV.TISS_RETORNO_DEMON_CONTA       CTA
+            				          , DBAMV.TISS_RETORNO_DEMON_CONTA_LOTE 	CLOTE
+            				          , DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA 	CGUIA
+            				          , DBAMV.TISS_RETORNO_DEMON_CONTA_PROC 	CPROC
+            				          , DBAMV.TISS_GUIA TG
+            				          , ( SELECT CD_REMESSA, TO_NUMBER(NULL) CD_REMESSA_GLOSA, CD_ITFAT_NF, TO_NUMBER(NULL) CD_GLOSAS, CD_ATENDIMENTO, CD_REG_FAT, CD_REG_AMB, CD_PRO_FAT
+            				                   , VL_ITFAT_NF, QT_ITFAT_NF, CD_LANCAMENTO_FAT, CD_LANCAMENTO_AMB, CD_PRESTADOR, CD_ATI_MED, ID_IT_ENVIO
+            				                FROM DBAMV.ITFAT_NOTA_FISCAL
+            				               WHERE P_CD_REMESSA_GLOSA_LOTE IS NULL
+            				                 AND CD_REMESSA = P_CD_REMESSA_LOTE
+            				               UNION ALL
+            				              SELECT TO_NUMBER(P_CD_REMESSA_LOTE) CD_REMESSA, CD_REMESSA_GLOSA, TO_NUMBER(NULL) CD_ITFAT_NF, CD_GLOSAS, CD_ATENDIMENTO, CD_REG_FAT, CD_REG_AMB, CD_PRO_FAT
+            				                   , VL_REAPRESENTADO VL_ITFAT_NF, QT_REAPRESENTADA QT_ITFAT_NF, CD_LANCAMENTO_FAT, CD_LANCAMENTO_AMB, CD_PRESTADOR, CD_ATI_MED, ID_IT_ENVIO
+            				                FROM DBAMV.GLOSAS
+            				               WHERE P_CD_REMESSA_GLOSA_LOTE IS NOT NULL
+            				                 AND CD_REMESSA_GLOSA = P_CD_REMESSA_GLOSA_LOTE  ) ITFAT
+            				          , (SELECT COUNT(CD_ITFAT_NF) QTDE_ITENS, SUM(VL_ITFAT_NF) VL_AGRUPADO, ID_IT_ENVIO
+            				               FROM DBAMV.ITFAT_NOTA_FISCAL
+            				              WHERE CD_REMESSA = P_CD_REMESSA_LOTE
+            				              GROUP BY ID_IT_ENVIO) AGRUP
+            				     WHERE CLOTE.ID    					= P_ID_TLD
+            	             AND 'SO_GLOSAS' = DBAMV.pkg_ffcv_retorno_tiss.F_TP_ANALISE_RETORNO(CGUIA.ID)
+            				       AND LPAD(CLOTE.NR_LOTE, 20, '0') 	= LPAD(P_NR_LOTE, 20, '0')
+            				       AND CTA.ID						= CLOTE.ID_PAI
+            				       AND CGUIA.ID_PAI					= CLOTE.ID
+            				       AND ( CGUIA.CD_STATUS_GUIA in ('6','4')
+            				             OR (CGUIA.CD_STATUS_GUIA = '3' AND CGUIA.VL_GLOSA_GUIA = CGUIA.VL_INFORMADO_GUIA))
+            	             AND NOT EXISTS (SELECT 'X'
+            				                         FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PROC DP1, DBAMV.ITFAT_NOTA_FISCAL ITF2, DBAMV.IT_RECEBIMENTO IR
+            				                        WHERE DP1.ID_PAI       = CGUIA.ID
+            				                          AND ITF2.CD_REMESSA  = P_CD_REMESSA_LOTE
+            				                          AND ITF2.ID_IT_ENVIO = DP1.ID_IT_ENVIO
+            				                          AND IR.CD_ITFAT_NF   = ITF2.CD_ITFAT_NF
+                                              AND IR.CD_ITFAT_NF = ITFAT.CD_ITFAT_NF)
+            				       AND CPROC.ID_PAI  = CGUIA.ID
+            				       AND TG.ID         =  CGUIA.ID_GUIA_ENVIO
+            				       AND TG.NM_XML    <> 'guiaConsulta'
+            				       AND ITFAT.ID_IT_ENVIO(+)	= CPROC.ID_IT_ENVIO
+            				       AND AGRUP.ID_IT_ENVIO(+) 	= CPROC.ID_IT_ENVIO
+            	 UNION
+            	/* SOMENTE GLOSAS NO RETORNO - a diferena que foi paga (ITFAT_NOTA_FISCAL sem Glosas) */
+            				    SELECT 'SO_GLOSAS2' TIPO
+            				          , NULL      ID_RETORNO_PROC
+            				          , NULL      ID_RETORNO_GUIA
+            				          , ITF.VL_ITFAT_NF  VL_PROCESSADO
+            				          , ITF.VL_ITFAT_NF  VL_LIBERADO
+            				          , 0                VL_GLOSADO
+	          , TO_CHAR(ITF.QT_ITFAT_NF)	QT_EXECUTADA_PROC
+            				          , ITF.CD_REMESSA
+            				          , NULL CD_REMESSA_GLOSA
+            				          , ITF.CD_ITFAT_NF
+            				          , NULL CD_GLOSAS
+            				          , ITF.CD_ATENDIMENTO
+            				          , ITF.CD_REG_FAT
+            				          , ITF.CD_REG_AMB
+            				          , ITF.CD_PRO_FAT
+            				          , ITF.VL_ITFAT_NF
+            				          , ITF.QT_ITFAT_NF
+            				          , ITF.CD_LANCAMENTO_FAT
+            				          , ITF.CD_LANCAMENTO_AMB
+            				          , ITF.CD_PRESTADOR
+            				          , ITF.CD_ATI_MED
+            				          , ITF.ID_IT_ENVIO
+            				          , ITF.QT_ITFAT_NF  QTDE_ITENS_AGRUP
+            				          , ITF.VL_ITFAT_NF  VL_AGRUP
+            				          , 0                VL_GLOSA_DIF
+            				          , TO_NUMBER(NULL)  VL_INFORMADO
+            				          , 'X'              SN_GLOSA_AGRUP
+                              , NULL DS_OBSERVACAO_IMPORTACAO
+            				      FROM DBAMV.ITFAT_NOTA_FISCAL ITF
+                             , DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA  CGUIA
+            				     WHERE ITF.CD_REMESSA = P_CD_REMESSA_LOTE
+                           AND CGUIA.ID_PAI = P_ID_TLD
+                           AND (ITF.CD_REG_FAT = CGUIA.CD_REG_FAT OR ITF.CD_REG_AMB = CGUIA.CD_REG_AMB)
+            	             AND 'SO_GLOSAS' = DBAMV.pkg_ffcv_retorno_tiss.F_TP_ANALISE_RETORNO(CGUIA.ID)
+            				       /* item no pode ter sido retornado como glosa */
+            	             AND NOT EXISTS (SELECT 'X' FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PROC TR WHERE TR.ID_IT_ENVIO = ITF.ID_IT_ENVIO)
+            				       /* item no pode estar no retorno mesmo com inconsistncia */
+            	             AND NOT EXISTS (SELECT 'X'
+            				                         FROM DBAMV.tiss_itguia tig, dbamv.tiss_guia tg, dbamv.tiss_retorno_demon_conta_proc tr
+            	                               WHERE tig.id = itf.id_it_envio
+            	                                 AND tg.id = tig.id_pai
+            	                                 AND tr.id_pai = P_ID_TLD
+            	                                 AND TR.CD_PROCEDIMENTO = tig.cd_procedimento
+            	                                 AND (TO_NUMBER(TIG.VL_TOTAL,'9999990.00')/To_Number(TIG.QT_REALIZADA)) = (TO_NUMBER(NVL(TR.VL_INFORMADO,'0'),'9999990.00')/To_Number(TR.QT_EXECUTADA))
+            	                                 AND tr.id_it_envio IS NULL
+            	                              union
+            	                              SELECT 'X'
+            				                         FROM DBAMV.tiss_itguia_out tig, dbamv.tiss_guia tg, dbamv.tiss_retorno_demon_conta_proc tr
+            	                               WHERE tig.id = itf.id_it_envio
+            	                                 AND tg.id = tig.id_pai
+            	                                 AND tr.id_pai = P_ID_TLD
+            	                                 AND TR.CD_PROCEDIMENTO = tig.cd_procedimento
+            	                                 AND (TO_NUMBER(TIG.VL_TOTAL,'9999990.00')/To_Number(TIG.QT_REALIZADA)) = (TO_NUMBER(NVL(TR.VL_INFORMADO,'0'),'9999990.00')/To_Number(TR.QT_EXECUTADA))
+            	                                 AND tr.id_it_envio IS NULL )
+                ) QR
+			ORDER BY QR.ID_RETORNO_PROC;
+
+  CURSOR C_CONVENIO(P_CD_CONVENIO NUMBER) IS
+		SELECT CONVENIO.NM_CONVENIO
+		 		 , CONVENIO.CD_CON_COR
+				 , CONVENIO.DS_MOVIMENTACAO
+				 , CONVENIO.CD_MOTIVO_GLOSA
+		  FROM DBAMV.CONVENIO
+		     , DBAMV.EMPRESA_CONVENIO
+		WHERE TP_CONVENIO = 'C'
+		  AND NVL(SN_FILANTROPIA,'N') = 'N'
+      AND EMPRESA_CONVENIO.CD_CONVENIO = CONVENIO.CD_CONVENIO
+      AND EMPRESA_CONVENIO.CD_MULTI_EMPRESA = DBAMV.PKG_MV2000.LE_EMPRESA
+		  AND CONVENIO.CD_CONVENIO = P_CD_CONVENIO;
+
+  CURSOR C_CON_REC(P_CD_NOTA_FISCAL number) IS
+    select con_rec.cd_con_rec,
+           itcon_rec.cd_itcon_rec
+      from dbamv.con_rec,
+           dbamv.itcon_rec
+     where con_rec.cd_nota_fiscal = P_CD_NOTA_FISCAL
+       and con_rec.cd_con_rec	= itcon_rec.cd_con_rec;
+  R_CON_REC C_CON_REC%ROWTYPE;
+  --
+
+  R_CONVENIO C_CONVENIO%ROWTYPE;
+  -- Variveis global.
+  G_CD_CONVENIO             NUMBER;
+  G_CD_MOTIVO_GLOSA_CONV    NUMBER;
+  G_DS_MOVIMENTACAO_CONV    VARCHAR2(2000);
+  -- Variveis global da TISS_RETORNO_DEMON_CONTA_LOTE
+	G_NR_NOTA_FISCAL_LOTE			VARCHAR2(2000);
+	G_CD_NOTA_FISCAL					NUMBER;
+	G_ID_LOTE									NUMBER;
+	G_ID_PAI									NUMBER;
+	G_ID_MENSAGEM_ENVIO				NUMBER;
+	G_CD_REMESSA_LOTE					NUMBER;
+	G_CD_REMESSA_GLOSA_LOTE		NUMBER;
+	G_NR_LOTE									VARCHAR2(2000);
+	G_NR_PROTOCOLO						VARCHAR2(2000);
+	G_VL_FATURADO							NUMBER;
+	G_VL_GLOSA								NUMBER;
+	G_VL_LIBERADO					  	NUMBER;
+	G_ID_MSG_RETORNO				  NUMBER;
+	-- Totalizadores
+	G_VL_TOT_FATURADO					NUMBER;
+	G_VL_TOT_DECL_GLOSA				NUMBER;
+	G_VL_TOT_DECL_LIBERADO		NUMBER;
+  --
+  nCdItFat                  number;
+  nUltimaGlosa              number;
+  nVlNfAgrup                number;
+  nIdEnvio                  number;
+  nGlosaAgrup               number;
+  --
+  FUNCTION F_EXISTE_DEM_RETORNO_LOTE(P_ID_LOTE IN NUMBER) RETURN BOOLEAN;
+  FUNCTION F_EXISTE_RETORNO_LOTE_TISS(P_ID_LOTE IN NUMBER) RETURN BOOLEAN;
+  FUNCTION F_CONCILIA_IT_RETORNO( P_ID_RETORNO IN NUMBER,P_ID_LOTE_RETORNO IN NUMBER,P_TIPO_RETORNO IN VARCHAR2 DEFAULT 'ID_CONCIL',P_GRAVA_ACAO IN VARCHAR2 DEFAULT 'NAO') RETURN VARCHAR2;
+  FUNCTION F_TRADUZ_PROC_REVERSO(P_CD_CONVENIO IN NUMBER, P_CD_MOTIVO_GLOSA IN NUMBER, P_MSG_ERRO OUT VARCHAR2) RETURN VARCHAR2;
+  FUNCTION F_TRATA_PROTOCOLO( P_PROTOCOLO VARCHAR2 ) RETURN VARCHAR2;
+  FUNCTION F_CONC_GLOSA_AGP(P_ID_IT_ENVIO IN NUMBER, P_CD_ITFAT_NF IN NUMBER) RETURN VARCHAR2;
+  --Oswaldo Inicio
+  FUNCTION F_ITENS_RETORNO_LOTE_TISS(pFinanRecebItem tpFinanRecebItem) RETURN NUMBER;
+  FUNCTION F_CABECALHO_RETORNO_LOTE_TISS(pFinanReceb tpFinanReceb) RETURN NUMBER;
+  FUNCTION F_LOTE_VL_FATURADO (P_CD_ORIGEM IN NUMBER) RETURN NUMBER;
+  --Oswaldo Fim
+  --
+  PROCEDURE P_VALIDA_DADOS( P_REMESSA  NUMBER );
+  PROCEDURE P_AJUSTA_ITFAT_NF(P_CD_REMESSA_LOTE IN NUMBER, P_MSG_ERRO OUT VARCHAR2);
+  PROCEDURE P_APAGA_CONCILIACAO_ANTERIOR(P_ID IN NUMBER,P_MSG_ERRO OUT VARCHAR2);
+  PROCEDURE P_TRADUZ_GLOSAS(P_ID IN  NUMBER, P_MSG_ERRO OUT VARCHAR2);
+  PROCEDURE P_CONCILIA_IT_RETORNO(P_ID_LOTE IN NUMBER, P_MSG_ERRO OUT VARCHAR2);
+  PROCEDURE P_APURA_CONCILIADO(P_CD_REMESSA IN NUMBER, P_NR_LOTE IN VARCHAR2, P_CD_CONVENIO IN VARCHAR2, P_VL_LIBERADO OUT NUMBER , P_VL_GLOSA OUT NUMBER, P_VL_ACRESCIMO OUT NUMBER, P_VL_INVALIDO OUT NUMBER, P_MSG_ERRO OUT VARCHAR2);
+  PROCEDURE P_APURA_CONCILIADO_v304(P_NR_DOCUMENTO IN NUMBER, P_NR_LOTE IN VARCHAR2, P_CD_CONVENIO IN VARCHAR2, P_VL_LIBERADO OUT NUMBER , P_VL_GLOSA OUT NUMBER, P_VL_ACRESCIMO OUT NUMBER, P_VL_INVALIDO OUT NUMBER, P_MSG_ERRO OUT VARCHAR2);
+  PROCEDURE P_CARREGA_DADOS(P_CD_CONVENIO NUMBER, P_NR_LOTE VARCHAR2, P_CD_REMESSA NUMBER, P_MSG_ERRO OUT VARCHAR2);
+  PROCEDURE P_LIMPA_ANALISE_CONTA(P_ID_MSG NUMBER, P_NR_DOCUMENTO VARCHAR2, P_NR_LOTE VARCHAR2, P_MSG_ERRO OUT VARCHAR2);
+  PROCEDURE P_LIMPA_HISTORICO_ANA_CONTA(P_ID_MSG IN NUMBER, P_CD_REMESSA IN NUMBER,P_NR_LOTE IN VARCHAR2,PARAM_1 IN VARCHAR2,PARAM_2 IN VARCHAR2,PARAM_3 IN VARCHAR2, P_MSG_ERRO OUT VARCHAR2);
+  PROCEDURE PRC_APURA_RETORNO(P_CD_CONVENIO IN NUMBER, P_NR_LOTE VARCHAR2, P_CD_REMESSA NUMBER,P_VL_LIBERADO OUT NUMBER , P_VL_GLOSA OUT NUMBER, P_VL_ACRESCIMO OUT NUMBER, P_VL_INVALIDO OUT NUMBER, P_MSG_ERRO OUT VARCHAR2);
+  PROCEDURE PRC_APURA_RETORNO_v304(P_CD_CONVENIO IN NUMBER, P_NR_LOTE VARCHAR2, P_CD_REMESSA NUMBER,P_VL_LIBERADO OUT NUMBER , P_VL_GLOSA OUT NUMBER, P_VL_ACRESCIMO OUT NUMBER, P_VL_INVALIDO OUT NUMBER, P_MSG_ERRO OUT VARCHAR2);
+  --Oswaldo Inicio
+  PROCEDURE P_CANCELA_APURACAO(P_CD_REMESSA IN NUMBER, P_TP_ORIGEM IN VARCHAR, P_DT_RECEBIMENTO IN DATE, P_CD_FINAN_RECEB IN NUMBER, P_NR_LOTE IN NUMBER);
+  PROCEDURE P_ANALISE_CONTAS(P_CD_ORIGEM_ITEM IN NUMBER, P_TP_GUIA OUT VARCHAR, P_CD_CONTA OUT NUMBER, P_TP_CONTA OUT VARCHAR);
+  PROCEDURE P_GET_RESUMO_PAGAMENTO(P_CD_ORIGEM IN VARCHAR, TM_ID OUT NUMBER, NR_DEMONSTRATIVO OUT VARCHAR, DT_EMISSAO OUT DATE, DT_PAGAMENTO OUT DATE, TP_PAGAMENTO OUT VARCHAR, CD_BANCO OUT VARCHAR, CD_AGENCIA OUT VARCHAR, NR_CONTA OUT VARCHAR, VL_TOT_GLOSA OUT VARCHAR, VL_FINAL_LIBERADO OUT VARCHAR);
+  --Oswaldo Fim
+  --
+
+END pkg_ffcv_retorno_tiss;
+/
+
+PROMPT CREATE OR REPLACE PACKAGE BODY dbamv.pkg_ffcv_retorno_tiss
+CREATE OR REPLACE PACKAGE BODY dbamv.pkg_ffcv_retorno_tiss AS
+
+PROCEDURE PRC_APURA_RETORNO(P_CD_CONVENIO IN NUMBER,
+							P_NR_LOTE VARCHAR2,
+							P_CD_REMESSA NUMBER,
+							P_VL_LIBERADO OUT NUMBER ,
+							P_VL_GLOSA OUT NUMBER,
+							P_VL_ACRESCIMO OUT NUMBER,
+							P_VL_INVALIDO OUT NUMBER,
+							P_MSG_ERRO OUT VARCHAR2) IS
+  V_MSG_ERRO VARCHAR2(2000);
+  eERRO      EXCEPTION;
+  V_IDPRC    VARCHAR2(10);
+  PARAM_1    VARCHAR2(100);
+  PARAM_2    VARCHAR2(100);
+  PARAM_3    VARCHAR2(100);
+BEGIN
+  --  Carrega os dados para apurao
+  V_IDPRC:= '1';
+  P_CARREGA_DADOS(P_CD_CONVENIO,P_NR_LOTE,P_CD_REMESSA,V_MSG_ERRO);
+  IF V_MSG_ERRO IS NOT NULL THEN
+    RAISE eERRO;
+  END IF;
+  --  Limpa importaes anteriores
+  V_IDPRC:= '2';
+  P_LIMPA_HISTORICO_ANA_CONTA(G_ID_MSG_RETORNO,P_CD_REMESSA,P_NR_LOTE,PARAM_1,PARAM_2,PARAM_3,V_MSG_ERRO);
+  IF V_MSG_ERRO IS NOT NULL THEN
+    RAISE eERRO;
+  END IF;
+	-- Identifica se h itens sem conciliao de Envio na ITFAT_NF e recupera da origem ITREG_*
+  V_IDPRC:= '3';
+  P_AJUSTA_ITFAT_NF(P_CD_REMESSA,V_MSG_ERRO);
+  IF V_MSG_ERRO IS NOT NULL THEN
+    RAISE eERRO;
+  END IF;
+
+  -- Apaga conciliao de Retorno anterior
+  V_IDPRC:= '4';
+  P_APAGA_CONCILIACAO_ANTERIOR(G_ID_LOTE,V_MSG_ERRO);
+  IF V_MSG_ERRO IS NOT NULL THEN
+    RAISE eERRO;
+  END IF;
+
+ 	-- Traduz o registro de glosas
+  V_IDPRC:= '5';
+  P_TRADUZ_GLOSAS(G_ID_LOTE,V_MSG_ERRO);
+  IF V_MSG_ERRO IS NOT NULL THEN
+    RAISE eERRO;
+  END IF;
+
+  P_VALIDA_DADOS(P_CD_REMESSA);
+
+ 	-- Faz a conciliao dos itens retornados
+  V_IDPRC:= '6';
+  P_CONCILIA_IT_RETORNO(G_ID_LOTE,V_MSG_ERRO);
+  IF V_MSG_ERRO IS NOT NULL THEN
+    RAISE eERRO;
+  END IF;
+ 	-- Faz apurao da conciliao dos itens
+  V_IDPRC:= '7';
+  P_APURA_CONCILIADO(P_CD_REMESSA,P_NR_LOTE,P_CD_CONVENIO,P_VL_LIBERADO,P_VL_GLOSA,P_VL_ACRESCIMO,P_VL_INVALIDO,P_MSG_ERRO);
+  IF V_MSG_ERRO IS NOT NULL THEN
+    RAISE eERRO;
+  END IF;
+EXCEPTION
+   WHEN eERRO THEN
+     P_MSG_ERRO:= V_MSG_ERRO;
+	WHEN OTHERS THEN
+		P_MSG_ERRO:= 'PRC_APURA_RETORNO ('||V_IDPRC||') | '||SQLERRM;
+END PRC_APURA_RETORNO;
+
+PROCEDURE PRC_APURA_RETORNO_v304(P_CD_CONVENIO IN NUMBER,
+								 P_NR_LOTE VARCHAR2,
+								 P_CD_REMESSA NUMBER,
+								 P_VL_LIBERADO OUT NUMBER ,
+								 P_VL_GLOSA OUT NUMBER,
+								 P_VL_ACRESCIMO OUT NUMBER,
+								 P_VL_INVALIDO OUT NUMBER,
+								 P_MSG_ERRO OUT VARCHAR2) IS
+  V_MSG_ERRO VARCHAR2(2000);
+  eERRO      EXCEPTION;
+  V_IDPRC    VARCHAR2(10);
+BEGIN
+  --  Carrega os dados para apurao
+  V_IDPRC:= '1';
+  P_CARREGA_DADOS(P_CD_CONVENIO,P_NR_LOTE,P_CD_REMESSA,V_MSG_ERRO);
+  IF V_MSG_ERRO IS NOT NULL THEN
+    RAISE eERRO;
+  END IF;
+  --  Limpa importaes anteriores
+  V_IDPRC:= '2';
+  BEGIN
+    FOR R_ANA IN (SELECT ID
+                    FROM DBAMV.TISS_MENSAGEM
+                  WHERE ID <> G_ID_MSG_RETORNO
+                    AND TP_TRANSACAO = 'TISS_LOTE_APURACAO'
+                    AND NR_DOCUMENTO = TO_CHAR(P_CD_REMESSA)) LOOP
+      DBAMV.pkg_ffcv_retorno_tiss.P_LIMPA_ANALISE_CONTA(R_ANA.ID, P_CD_REMESSA, P_NR_LOTE, V_MSG_ERRO);
+    END LOOP;
+  EXCEPTION
+    WHEN OTHERS THEN
+     P_MSG_ERRO:= 'Problema ao apagar importação de XML anterior.'||Chr(10)||SQLERRM;
+     RAISE eERRO;
+  END;
+	-- Identifica se h itens sem conciliao de Envio na ITFAT_NF e recupera da origem ITREG_*
+  V_IDPRC:= '3';
+  P_AJUSTA_ITFAT_NF(P_CD_REMESSA,V_MSG_ERRO);
+  IF V_MSG_ERRO IS NOT NULL THEN
+    RAISE eERRO;
+  END IF;
+
+  --Oswaldo Inicio
+ 	-- Apaga conciliao de Retorno anterior
+  V_IDPRC:= '4';
+  P_APAGA_CONCILIACAO_ANTERIOR(G_ID_LOTE,V_MSG_ERRO);
+  IF V_MSG_ERRO IS NOT NULL THEN
+    RAISE eERRO;
+  END IF;
+  --Oswaldo Fim
+
+ 	-- Traduz o registro de glosas
+  V_IDPRC:= '5';
+  P_TRADUZ_GLOSAS(G_ID_LOTE,V_MSG_ERRO);
+  IF V_MSG_ERRO IS NOT NULL THEN
+    RAISE eERRO;
+  END IF;
+
+  P_VALIDA_DADOS(P_CD_REMESSA);
+
+  --Oswaldo Inicio
+  -- Faz a conciliao dos itens retornados
+  V_IDPRC:= '6';
+  P_CONCILIA_IT_RETORNO(G_ID_LOTE,V_MSG_ERRO);
+  IF V_MSG_ERRO IS NOT NULL THEN
+    RAISE eERRO;
+  END IF;
+  --Oswaldo Fim
+
+ 	-- Faz apurao da conciliao dos itens
+  V_IDPRC:= '7';
+  P_APURA_CONCILIADO_v304(P_CD_REMESSA,P_NR_LOTE,P_CD_CONVENIO,P_VL_LIBERADO,P_VL_GLOSA,P_VL_ACRESCIMO,P_VL_INVALIDO,P_MSG_ERRO);
+  IF V_MSG_ERRO IS NOT NULL THEN
+    RAISE eERRO;
+  END IF;
+EXCEPTION
+   WHEN eERRO THEN
+     P_MSG_ERRO:= V_MSG_ERRO;
+	WHEN OTHERS THEN
+		P_MSG_ERRO:= 'PRC_APURA_RETORNO_v304 ('||V_IDPRC||') | '||SQLERRM;
+END PRC_APURA_RETORNO_v304;
+
+PROCEDURE P_APAGA_CONCILIACAO_ANTERIOR(P_ID IN NUMBER,P_MSG_ERRO OUT VARCHAR2) IS
+BEGIN
+		FOR L IN (SELECT ID
+								FROM  DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA
+                WHERE ID_PAI = P_ID) LOOP
+			UPDATE DBAMV.TISS_RETORNO_DEMON_CONTA_PROC
+    		 SET ID_IT_ENVIO =  NULL
+    		 	 , DS_OBSERVACAO_IMPORTACAO = NULL
+   			WHERE ID_PAI = L.ID;
+   	END LOOP;
+EXCEPTION
+  WHEN OTHERS THEN
+		P_MSG_ERRO:= 'P_APAGA_CONCILIACAO_ANTERIOR | '||SQLERRM;
+END;
+--Oswaldo Inicio
+PROCEDURE P_CANCELA_APURACAO(P_CD_REMESSA IN NUMBER, P_TP_ORIGEM IN VARCHAR, P_DT_RECEBIMENTO IN DATE, P_CD_FINAN_RECEB IN NUMBER, P_NR_LOTE IN NUMBER) IS
+
+	CURSOR MOSTRA_ID(P_REMESSA NUMBER)IS
+		SELECT ID
+		  FROM DBAMV.TISS_MENSAGEM
+		 WHERE NR_DOCUMENTO = P_REMESSA
+		   AND TP_TRANSACAO = 'DEMONSTRATIVO_ANALISE_CONTA';
+
+	P_ID      NUMBER;
+  vMsg_ERRO VARCHAR2(2000);
+BEGIN
+
+	IF P_DT_RECEBIMENTO IS NOT NULL THEN
+		Raise_Application_Error(-20001, pkg_rmi_traducao.extrair_proc_msg('MSG_1', 'pkg_ffcv_retorno_tiss', 'Atenção: Remessa ('|| P_CD_REMESSA ||') e Lote ('|| P_NR_LOTE ||') com baixa financeiro. Primeiro cancele a baixa.') );
+
+	ELSIF P_TP_ORIGEM <> 'TISS_LOTE_APURACAO' THEN
+		Raise_Application_Error(-20001, pkg_rmi_traducao.extrair_proc_msg('MSG_2', 'pkg_ffcv_retorno_tiss', 'Atenção: Remessa ('|| P_CD_REMESSA ||') e Lote ('|| P_NR_LOTE ||') não pertence ao padrão TISS.') );
+
+	ELSE
+		OPEN MOSTRA_ID(P_CD_REMESSA);
+		FETCH MOSTRA_ID INTO P_ID;
+		CLOSE MOSTRA_ID;
+
+		P_LIMPA_ANALISE_CONTA(P_ID, P_CD_REMESSA, P_NR_LOTE, vMsg_ERRO);
+
+		DELETE FROM DBAMV.FINAN_RECEB_ITEM
+		 WHERE CD_FINAN_RECEB = P_CD_FINAN_RECEB;
+
+		DELETE FROM DBAMV.FINAN_RECEB
+		 WHERE CD_FINAN_RECEB = P_CD_FINAN_RECEB;
+
+	END IF;
+END;
+
+PROCEDURE P_DAC_APURA_CONCILIADO(tDadosApuracao IN OUT recDadosApuracao, pMSG_ERRO OUT VARCHAR2) IS
+
+  nSeqDRL           NUMBER;
+  nSeqIDRL          NUMBER;
+
+  nVL_INFORMADO    NUMBER:= 0;
+  nVL_PROCESSADO   NUMBER:= 0;
+  nAPURADOMV       NUMBER:= 0;
+
+  nVL_GLOSA_ITEM    NUMBER:= 0;
+  nVL_ACRESC_ITEM   NUMBER:= 0;
+  nVL_LIBERADO_ITEM NUMBER:= 0;
+  nVL_INVALIDO_ITEM NUMBER:= 0;
+
+  tFinanReceb       tpFinanReceb;
+  tFinanRecebItem   tpFinanRecebItem;
+  vMSG_ERRO         VARCHAR2(2000);
+  eSAIDA            EXCEPTION;
+
+
+BEGIN
+
+
+  OPEN C_LOTE_ENVIO(tDadosApuracao.ID_MSG_ORIGEM);
+  FETCH C_LOTE_ENVIO INTO R_LOTE_ENVIO;
+  CLOSE C_LOTE_ENVIO;
+
+  tDadosApuracao.CD_REMESSA_GLOSA:= R_LOTE_ENVIO.CD_REMESSA_GLOSA;
+
+  OPEN C_CON_REC(tDadosApuracao.CD_NOTA_FISCAL);
+  FETCH C_CON_REC INTO R_CON_REC;
+  CLOSE C_CON_REC;
+
+  tFinanReceb.CD_CON_REC := R_CON_REC.CD_CON_REC;
+  tFinanReceb.CD_ITCON_REC := R_CON_REC.CD_ITCON_REC;
+  tFinanReceb.CD_FINAN_RECEB := NULL;
+  --
+  tDadosApuracao.VL_LIBERADO := 0;
+  tDadosApuracao.VL_GLOSADO  := 0;
+  tDadosApuracao.VL_ACRESCIMO:= 0;
+  tDadosApuracao.VL_INVALIDO:= 0;
+
+  nSeqDRL := F_DAC_DADOS_FINAN_RECEB(tFinanReceb,tDadosApuracao);
+
+	FOR rCONCILIADO IN cCONCILIADO(tDadosApuracao.CD_REMESSA,tDadosApuracao.CD_REMESSA_GLOSA,tDadosApuracao.ID_DLT,tDadosApuracao.NR_LOTE) LOOP
+		IF rCONCILIADO.ID_IT_ENVIO IS NOT NULL OR rCONCILIADO.TIPO = 'CONSULTAS'  THEN
+      --
+
+      nVL_LIBERADO_ITEM := Nvl(rCONCILIADO.VL_LIBERADO_CONC,0);
+      --
+  	  nVL_GLOSA_ITEM :=	Nvl(rCONCILIADO.VL_GLOSADO_CONC,0);
+
+      IF F_DAC_DIF_LIB(rCONCILIADO.cd_itfat_nf) > 0 THEN
+        -- n remover
+        NULL;
+      END IF;
+
+      if rCONCILIADO.qtde_itens_agrup>1 then
+
+        if nVL_LIBERADO_ITEM/rCONCILIADO.qtde_itens_agrup = nVlNFAgrup THEN
+          nVL_LIBERADO_ITEM := rCONCILIADO.vl_itfat_nf - F_DAC_DIF_LIB(rCONCILIADO.cd_itfat_nf);
+
+        elsif nVL_LIBERADO_ITEM/rCONCILIADO.qtde_itens_agrup > nVlNFAgrup THEN
+  	      nVL_LIBERADO_ITEM := (nVL_LIBERADO_ITEM/rCONCILIADO.qtde_itens_agrup) - F_DAC_DIF_LIB(rCONCILIADO.cd_itfat_nf);
+        end if;
+        nVL_GLOSA_ITEM:= F_DAC_DIF_LIB(rCONCILIADO.cd_itfat_nf);
+
+        IF (NVL(nVL_LIBERADO_ITEM,0)+ NVL(nVL_GLOSA_ITEM,0)) > nVlNFAgrup THEN
+
+          IF tDadosApuracao.SN_CONSIDERA_NF = 'S' THEN
+            nVL_ACRESC_ITEM :=	((Nvl(nVL_LIBERADO_ITEM,0) + NVL(nVL_GLOSA_ITEM,0)) - nVlNFAgrup);
+          ELSE
+            -- Quando não considerar NF, com saber os acréscimos
+            nVL_ACRESC_ITEM :=	((Nvl(nVL_LIBERADO_ITEM,0) + NVL(nVL_GLOSA_ITEM,0)));
+          END IF;
+
+        END IF;
+
+      end if;
+
+      --
+
+      nVL_ACRESC_ITEM:= 0;
+      IF (NVL(nVL_LIBERADO_ITEM,0)+ NVL(nVL_GLOSA_ITEM,0)) > NVL(rCONCILIADO.VL_ITFAT_NF,0) THEN
+		    IF tDadosApuracao.SN_CONSIDERA_NF = 'S' THEN
+          nVL_ACRESC_ITEM :=	((Nvl(nVL_LIBERADO_ITEM,0) + NVL(nVL_GLOSA_ITEM,0)) - NVL(rCONCILIADO.VL_ITFAT_NF,0));
+        ELSE
+          -- Quando não considerar NF, com saber os acréscimos
+          nVL_ACRESC_ITEM :=	((Nvl(nVL_LIBERADO_ITEM,0) + NVL(nVL_GLOSA_ITEM,0)));
+        END IF;
+
+      END IF;
+
+
+      --
+      tDadosApuracao.VL_LIBERADO:=	Nvl(tDadosApuracao.VL_LIBERADO,0) + nVL_LIBERADO_ITEM;
+  	  tDadosApuracao.VL_GLOSADO :=	Nvl(tDadosApuracao.VL_GLOSADO,0) + nVL_GLOSA_ITEM;
+      tDadosApuracao.VL_ACRESCIMO:=  Nvl(tDadosApuracao.VL_ACRESCIMO,0) +  nVL_ACRESC_ITEM;
+      --
+
+		ELSE
+      --
+			nVL_INVALIDO_ITEM:= Nvl(NVL(rCONCILIADO.VL_INFORMADO,rCONCILIADO.VL_PROCESSADO_CONC),0);
+      tDadosApuracao.VL_INVALIDO:= Nvl(tDadosApuracao.VL_INVALIDO,0) + nVL_INVALIDO_ITEM;
+
+      --
+		END IF;
+
+    tFinanRecebItem.CD_FINAN_RECEB_ITEM := NULL;
+    --
+    tFinanRecebItem.CD_FINAN_RECEB      := nSeqDRL;
+    tFinanRecebItem.CD_ORIGEM_ITEM      := rCONCILIADO.ID_RETORNO_PROC;
+    tFinanRecebItem.CD_ORIGEM           := rCONCILIADO.ID_RETORNO_GUIA;
+    tFinanRecebItem.CD_ITFAT_NF         := rCONCILIADO.CD_ITFAT_NF;
+    tFinanRecebItem.CD_REMESSA          := rCONCILIADO.CD_REMESSA;
+    tFinanRecebItem.CD_PROCEDIMENTO     := rCONCILIADO.CD_PRO_FAT;
+    tFinanRecebItem.CD_MOTIVO_1         := TO_NUMBER(F_DADO_GLOSA(rCONCILIADO.ID_RETORNO_PROC, 1, 'CODIGO_MV'));
+    tFinanRecebItem.CD_MOTIVO_2         := TO_NUMBER(F_DADO_GLOSA(rCONCILIADO.ID_RETORNO_PROC, 2, 'CODIGO_MV'));
+    tFinanRecebItem.CD_MOTIVO_3         := TO_NUMBER(F_DADO_GLOSA(rCONCILIADO.ID_RETORNO_PROC, 3, 'CODIGO_MV'));
+    tFinanRecebItem.VL_INFORMADO        := Nvl(rCONCILIADO.VL_INFORMADO,0);
+    tFinanRecebItem.VL_PROCESSADO       := Nvl(rCONCILIADO.VL_PROCESSADO_PROC,0);
+    tFinanRecebItem.VL_LIBERADO         := Nvl(rCONCILIADO.VL_LIBERADO_PROC,0);
+    tFinanRecebItem.VL_GLOSA            := Nvl(rCONCILIADO.VL_GLOSADO_PROC,0);
+    tFinanRecebItem.VL_ACRESCIMO        := Nvl(nVL_ACRESC_ITEM,0);
+    tFinanRecebItem.VL_IMPOSTO          := NULL;
+    tFinanRecebItem.VL_DESCONTO         := NULL;
+    tFinanRecebItem.VL_INVALIDO         := nVL_INVALIDO_ITEM;
+	  tFinanRecebItem.DS_FALHA            := rCONCILIADO.DS_OBSERVACAO_IMPORTACAO;
+    --
+    nSeqIDRL := F_ITENS_RETORNO_LOTE_TISS(tFinanRecebItem);
+
+
+	END LOOP;
+
+
+
+  nAPURADOMV:= tDadosApuracao.VL_LIBERADO + tDadosApuracao.VL_GLOSADO + tDadosApuracao.VL_ACRESCIMO + tDadosApuracao.VL_INVALIDO;
+
+  IF nAPURADOMV = 0 THEN
+    vMSG_ERRO:= 'Nada foi apurado! Importação para o financeiro não foi realizada.';
+    RAISE eSAIDA;
+  END IF;
+
+  tFinanReceb.CD_FINAN_RECEB := nSeqDRL;
+  tFinanReceb.CD_NOTA_FISCAL := tDadosApuracao.CD_NOTA_FISCAL;
+  tFinanReceb.VL_LIBERADO    := tDadosApuracao.VL_LIBERADO;
+  tFinanReceb.VL_GLOSADO     := tDadosApuracao.VL_GLOSADO;
+  tFinanReceb.VL_ACRESCIMO   := tDadosApuracao.VL_ACRESCIMO;
+  tFinanReceb.VL_IMPOSTO     := NULL;
+  tFinanReceb.VL_DESCONTO    := NULL;
+  tFinanReceb.VL_INVALIDO    := tDadosApuracao.VL_INVALIDO;
+  --
+  nSeqDRL := F_DAC_DADOS_FINAN_RECEB(tFinanReceb,tDadosApuracao);
+
+EXCEPTION
+  WHEN eSAIDA THEN
+    pMSG_ERRO:= vMSG_ERRO;
+
+  WHEN OTHERS THEN
+    pMSG_ERRO:= 'P_DAC_APURA_CONCILIADO/FINAN_RECEB( '||nSeqDRL||'):  '||SQLERRM;
+
+END P_DAC_APURA_CONCILIADO;
+
+
+PROCEDURE P_ANALISE_CONTAS(P_CD_ORIGEM_ITEM IN NUMBER, P_TP_GUIA OUT VARCHAR, P_CD_CONTA OUT NUMBER, P_TP_CONTA OUT VARCHAR)IS
+  CURSOR cAnaliseContas(pCdOrigemItem NUMBER)IS
+  SELECT etg.NM_XML tp_guia
+       , Nvl(itfat.CD_REG_AMB,itfat.CD_REG_FAT) cd_conta
+       , Decode(itfat.CD_REG_AMB,NULL,'H','A') tp_conta
+    FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PROC ritg
+       , DBAMV.TISS_ITGUIA eitg
+       , DBAMV.TISS_GUIA etg
+       , DBAMV.ITFAT_NOTA_FISCAL itfat
+   WHERE ritg.ID_IT_ENVIO = eitg.ID
+     AND etg.ID = eitg.ID_PAI
+     AND itfat.ID_IT_ENVIO = ritg.ID_IT_ENVIO
+     AND ritg.ID = pCdOrigemItem;
+
+  rAnaliseContas cAnaliseContas%ROWTYPE;
+
+BEGIN
+  OPEN cAnaliseContas(P_CD_ORIGEM_ITEM);
+  FETCH cAnaliseContas INTO rAnaliseContas;
+  CLOSE cAnaliseContas;
+
+  P_TP_GUIA   := rAnaliseContas.tp_guia;
+  P_CD_CONTA  := rAnaliseContas.cd_conta;
+  P_TP_CONTA  := rAnaliseContas.tp_conta;
+END;
+--Oswaldo Fim
+
+PROCEDURE P_TRADUZ_GLOSAS(P_ID IN  NUMBER, P_MSG_ERRO OUT VARCHAR2) IS
+	CURSOR C_MOT_GLOSA_ITENS(P_ID_PAI NUMBER) IS
+		SELECT ID ID_GLOSA_PRC
+         , CD_MOT_GLOSA
+         , CD_MOTIVO_GLOSA
+         , TO_NUMBER(VL_GLOSA,'999999999999999.99') VL_GLOSA
+      FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PRC_G
+		 WHERE ID_PAI = P_ID_PAI
+		 ORDER BY TO_NUMBER(NVL(VL_GLOSA,'0'),'999999999999999.99') DESC ;
+  N_VL_GLOSA_TMP      NUMBER:=0;
+	N_CD_MOT_GLOSA_TMP	NUMBER:= NULL;
+  V_MSG_ERRO          VARCHAR2(2000);
+  eERRO               EXCEPTION;
+BEGIN
+	FOR R_DEMON_CONTA_PRC IN (SELECT ID,VL_PROCESSADO,ID_IT_ENVIO
+							                FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PROC
+							               WHERE ID_PAI IN (SELECT ID
+														                    FROM  DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA
+                   						                 WHERE ID_PAI = P_ID) ) LOOP
+  		-- Atualiza valor glosado do item (na verso 3 vm distribudo nos motivos de glosa);
+			-- Atualiza o cdigo principal de glosa no item (maior valor, pois pode haver +1);
+			N_VL_GLOSA_TMP 		  := 0;
+			N_CD_MOT_GLOSA_TMP	:= NULL;
+      --
+			FOR R_MOT_GLOSA_ITENS IN C_MOT_GLOSA_ITENS(R_DEMON_CONTA_PRC.ID) LOOP
+				N_VL_GLOSA_TMP 	 := N_VL_GLOSA_TMP + R_MOT_GLOSA_ITENS.VL_GLOSA;
+				N_CD_MOT_GLOSA_TMP := F_TRADUZ_PROC_REVERSO(G_CD_CONVENIO,R_MOT_GLOSA_ITENS.CD_MOTIVO_GLOSA,V_MSG_ERRO);
+				IF N_CD_MOT_GLOSA_TMP IS NULL THEN
+					N_CD_MOT_GLOSA_TMP := G_CD_MOTIVO_GLOSA_CONV;
+				END IF;
+				BEGIN
+					UPDATE DBAMV.TISS_RETORNO_DEMON_CONTA_PROC
+						 SET  VL_GLOSADO 	= TO_CHAR(N_VL_GLOSA_TMP,'9999990.00')
+				   WHERE ID = R_DEMON_CONTA_PRC.ID;
+					UPDATE DBAMV.TISS_RETORNO_DEMON_CONTA_PRC_G
+						 SET CD_MOT_GLOSA 	= N_CD_MOT_GLOSA_TMP
+				   WHERE ID = R_MOT_GLOSA_ITENS.ID_GLOSA_PRC;
+				EXCEPTION
+					WHEN OTHERS THEN
+						V_MSG_ERRO:= SQLERRM;
+				END;
+			END LOOP;
+    END LOOP;
+  EXCEPTION
+    WHEN eERRO THEN
+      P_MSG_ERRO:= 'P_TRADUZ_GLOSAS_1 | '||V_MSG_ERRO;
+	  WHEN OTHERS THEN
+      P_MSG_ERRO:= 'P_TRADUZ_GLOSAS_2 | '||SQLERRM;
+END P_TRADUZ_GLOSAS;
+
+PROCEDURE P_DAC_MANTEM_GLOSAS(tDadosApuracao IN recDadosApuracao, pMSG_ERRO OUT VARCHAR2) IS
+
+	CURSOR C_MOT_GLOSA_ITENS(P_ID_PAI NUMBER) IS
+		SELECT ID ID_GLOSA_PRC
+         , CD_MOT_GLOSA
+         , CD_MOTIVO_GLOSA
+         , TO_NUMBER(VL_GLOSA,'999999999999999.99') VL_GLOSA
+      FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PRC_G
+		 WHERE ID_PAI = P_ID_PAI
+		 ORDER BY TO_NUMBER(NVL(VL_GLOSA,'0'),'999999999999999.99') DESC ;
+
+  N_VL_GLOSA_TMP      NUMBER:=0;
+	N_CD_MOT_GLOSA_TMP	NUMBER:= NULL;
+  V_MSG_ERRO          VARCHAR2(2000);
+  eERRO               EXCEPTION;
+
+BEGIN
+
+  FOR R_DEMON_CONTA_PRC IN (SELECT ID,VL_PROCESSADO,ID_IT_ENVIO
+							                FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PROC
+							               WHERE ID_PAI IN (SELECT ID
+														                    FROM  DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA
+                   						                 WHERE ID_PAI = tDadosApuracao.ID_DLT) ) LOOP
+  		-- Atualiza valor glosado do item (na verso 3 vm distribudo nos motivos de glosa);
+			-- Atualiza o cdigo principal de glosa no item (maior valor, pois pode haver +1);
+			N_VL_GLOSA_TMP 		  := 0;
+			N_CD_MOT_GLOSA_TMP	:= NULL;
+      --
+			FOR R_MOT_GLOSA_ITENS IN C_MOT_GLOSA_ITENS(R_DEMON_CONTA_PRC.ID) LOOP
+
+        N_VL_GLOSA_TMP 	 := N_VL_GLOSA_TMP + R_MOT_GLOSA_ITENS.VL_GLOSA;
+				N_CD_MOT_GLOSA_TMP := F_TRADUZ_PROC_REVERSO(tDadosApuracao.CD_CONVENIO,R_MOT_GLOSA_ITENS.CD_MOTIVO_GLOSA,V_MSG_ERRO);
+
+        IF N_CD_MOT_GLOSA_TMP IS NULL THEN
+					N_CD_MOT_GLOSA_TMP := tDadosApuracao.CD_MOTIVO_GLOSA;
+				END IF;
+
+        BEGIN
+					UPDATE DBAMV.TISS_RETORNO_DEMON_CONTA_PROC
+						 SET  VL_GLOSADO 	= TO_CHAR(N_VL_GLOSA_TMP,'9999990.00')
+				   WHERE ID = R_DEMON_CONTA_PRC.ID;
+
+          UPDATE DBAMV.TISS_RETORNO_DEMON_CONTA_PRC_G
+						 SET CD_MOT_GLOSA 	= N_CD_MOT_GLOSA_TMP
+				   WHERE ID = R_MOT_GLOSA_ITENS.ID_GLOSA_PRC;
+
+				EXCEPTION
+					WHEN OTHERS THEN
+						V_MSG_ERRO:= SQLERRM;
+            RAISE eERRO;
+				END;
+			END LOOP;
+    END LOOP;
+
+  EXCEPTION
+    WHEN eERRO THEN
+      pMSG_ERRO:= 'P_TRADUZ_GLOSAS_1 | '||V_MSG_ERRO;
+	  WHEN OTHERS THEN
+      pMSG_ERRO:= 'P_TRADUZ_GLOSAS_2 | '||SQLERRM;
+
+END P_DAC_MANTEM_GLOSAS;
+
+
+PROCEDURE P_AJUSTA_ITFAT_NF(P_CD_REMESSA_LOTE IN NUMBER, P_MSG_ERRO OUT VARCHAR2) IS
+    Cursor cTemItFatNAOConcil is
+      SELECT COUNT(*) TOTAL_CONCIL
+        FROM DBAMV.ITFAT_NOTA_FISCAL ITF
+       WHERE ITF.CD_REMESSA = P_CD_REMESSA_LOTE
+         AND (ITF.ID_IT_ENVIO IS NULL
+              OR NOT EXISTS (SELECT 'X' FROM DBAMV.TISS_ITGUIA TIT WHERE TIT.ID = ITF.ID_IT_ENVIO
+                              UNION ALL
+                             SELECT 'X' FROM DBAMV.TISS_ITGUIA_OUT TIO WHERE TIO.ID = ITF.ID_IT_ENVIO) ) ;
+  nTtNAOConcil  Number;
+BEGIN
+  -- Fora atualizao da ITFAT_NF sempre
+    if P_CD_REMESSA_LOTE is not NULL then
+      --
+      open 	cTemItFatNAOConcil;
+      fetch cTemItFatNAOConcil into nTtNAOConcil;
+      close cTemItFatNAOConcil;
+      --
+      if nvl(nTtNAOConcil,0)<>0 then -- basta ter item s/conciliao
+        UPDATE DBAMV.ITFAT_NOTA_FISCAL ITF
+           SET ITF.ID_IT_ENVIO = ( SELECT NVL(ITL.ID_IT_ENVIO,ITR.ID_IT_ENVIO)
+                                     FROM DBAMV.ITREG_FAT ITR,DBAMV.ITLAN_MED ITL
+                                    WHERE ITF.CD_REG_FAT        IS NOT NULL
+                                      AND ITR.CD_REG_FAT        = ITF.CD_REG_FAT
+                                      AND ITR.CD_LANCAMENTO     = ITF.CD_LANCAMENTO_FAT
+                                      AND ITL.CD_REG_FAT (+)    = ITR.CD_REG_FAT
+                                      AND ITL.CD_LANCAMENTO (+) = ITR.CD_LANCAMENTO
+                                      AND ITL.CD_ATI_MED (+)    = ITF.CD_ATI_MED
+                                      AND ITL.CD_PRESTADOR (+)  = ITF.CD_PRESTADOR
+                                      AND ROWNUM = 1
+                                      --
+                                   UNION ALL
+                                      --
+                                   SELECT ITA.ID_IT_ENVIO
+                                     FROM DBAMV.ITREG_AMB ITA
+                                    WHERE ITF.CD_REG_AMB      IS NOT NULL
+                                      AND ITA.CD_ATENDIMENTO  = ITF.CD_ATENDIMENTO
+                                      AND ITA.CD_REG_AMB      = ITF.CD_REG_AMB
+                                      AND ITA.CD_LANCAMENTO   = ITF.CD_LANCAMENTO_AMB)
+         WHERE ITF.CD_REMESSA = P_CD_REMESSA_LOTE ;
+      END IF;
+    END IF;
+  EXCEPTION
+	  WHEN OTHERS THEN
+      P_MSG_ERRO:= 'P_AJUSTA_ITFAT_NF | '||SQLERRM;
+END P_AJUSTA_ITFAT_NF;
+
+
+PROCEDURE P_DAC_AJUSTA_ITFAT_NF(tDadosApuracao IN recDadosApuracao, pMSG_ERRO OUT VARCHAR2) IS
+
+    Cursor cTemItFatNAOConcil(pRemessa NUMBER) is
+      SELECT COUNT(*) TOTAL_CONCIL
+        FROM DBAMV.ITFAT_NOTA_FISCAL ITF
+       WHERE ITF.CD_REMESSA = pRemessa
+         AND (ITF.ID_IT_ENVIO IS NULL
+              OR NOT EXISTS (SELECT 'X' FROM DBAMV.TISS_ITGUIA TIT WHERE TIT.ID = ITF.ID_IT_ENVIO
+                              UNION ALL
+                             SELECT 'X' FROM DBAMV.TISS_ITGUIA_OUT TIO WHERE TIO.ID = ITF.ID_IT_ENVIO) ) ;
+  nTtNAOConcil  NUMBER;
+
+BEGIN
+
+   -- Força atualizao da ITFAT_NF sempre
+   IF tDadosApuracao.SN_CONSIDERA_NF = 'S' AND tDadosApuracao.CD_REMESSA IS NOT NULL THEN
+
+    open cTemItFatNAOConcil(tDadosApuracao.CD_REMESSA);
+      fetch cTemItFatNAOConcil into nTtNAOConcil;
+    close cTemItFatNAOConcil;
+
+    if nvl(nTtNAOConcil,0) > 0 then -- basta ter item s/conciliao
+      UPDATE DBAMV.ITFAT_NOTA_FISCAL ITF
+         SET ITF.ID_IT_ENVIO = ( SELECT NVL(ITL.ID_IT_ENVIO,ITR.ID_IT_ENVIO)
+                                   FROM DBAMV.ITREG_FAT ITR,DBAMV.ITLAN_MED ITL
+                                  WHERE ITF.CD_REG_FAT        IS NOT NULL
+                                    AND ITR.CD_REG_FAT        = ITF.CD_REG_FAT
+                                    AND ITR.CD_LANCAMENTO     = ITF.CD_LANCAMENTO_FAT
+                                    AND ITL.CD_REG_FAT (+)    = ITR.CD_REG_FAT
+                                    AND ITL.CD_LANCAMENTO (+) = ITR.CD_LANCAMENTO
+                                    AND ITL.CD_ATI_MED (+)    = ITF.CD_ATI_MED
+                                    AND ITL.CD_PRESTADOR (+)  = ITF.CD_PRESTADOR
+                                    AND ROWNUM = 1
+                                    --
+                                 UNION ALL
+                                    --
+                                 SELECT ITA.ID_IT_ENVIO
+                                   FROM DBAMV.ITREG_AMB ITA
+                                  WHERE ITF.CD_REG_AMB      IS NOT NULL
+                                    AND ITA.CD_ATENDIMENTO  = ITF.CD_ATENDIMENTO
+                                    AND ITA.CD_REG_AMB      = ITF.CD_REG_AMB
+                                    AND ITA.CD_LANCAMENTO   = ITF.CD_LANCAMENTO_AMB)
+       WHERE ITF.CD_REMESSA = tDadosApuracao.CD_REMESSA;
+
+       open cTemItFatNAOConcil(tDadosApuracao.CD_REMESSA);
+         fetch cTemItFatNAOConcil into nTtNAOConcil;
+       close cTemItFatNAOConcil;
+       Dbms_Output.Put_Line('AVISO: Entrou em Ajusta ITFAT_NF porém permanece ('||nTtNAOConcil||') itens sem conciliação com a NF');
+     END IF;
+   END IF;
+
+  EXCEPTION
+	  WHEN OTHERS THEN
+      pMSG_ERRO:= 'P_DAC_AJUSTA_ITFAT_NF | '||SQLERRM;
+
+END P_DAC_AJUSTA_ITFAT_NF;
+
+
+FUNCTION F_CONCILIA_IT_RETORNO( P_ID_RETORNO IN NUMBER,P_ID_LOTE_RETORNO IN NUMBER,P_TIPO_RETORNO IN VARCHAR2 DEFAULT 'ID_CONCIL',P_GRAVA_ACAO IN VARCHAR2 DEFAULT 'NAO') RETURN VARCHAR2 IS
+/*
+            SELECT GUIA.ID_GUIA_ENVIO
+                 , PROC.ID ID_PROC
+                 , GUIA.ID_PAI ID_LOTE
+                 , DBAMV.pkg_ffcv_retorno_tiss.F_CONCILIA_IT_RETORNO(PROC.ID,GUIA.ID_PAI,'ID_CONCIL','NAO') CONCILIADO
+                 , DBAMV.pkg_ffcv_retorno_tiss.F_CONCILIA_IT_RETORNO(PROC.ID,GUIA.ID_PAI,'DESCRICAO','NAO') MOTIVO
+                 , PROC.TP_TAB_FAT
+                 , PROC.CD_PROCEDIMENTO
+                 , PROC.QT_EXECUTADA
+                 , PROC.VL_PROCESSADO
+                  ,PROC.CD_ATI_MED
+							FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PROC PROC
+                 , DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA GUIA
+ 						 WHERE PROC.ID_PAI = GUIA.ID
+               AND PROC.ID_PAI IN ( SELECT ID
+										      					 FROM  DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA
+                   				    		  WHERE ID_PAI = **P_ID_LOTE**)
+*/
+	--
+	  Cursor cRetorno(pnIdRetorno in number, pReserva in varchar2)  is
+    select  trp.id,
+            trp.id_pai,
+            trg.nr_guia,
+            trl.nr_lote,
+            trg.cd_atendimento,
+            nvl(trg.cd_reg_fat, trg.cd_reg_amb) cd_conta,
+            trp.tp_tab_fat,
+            trp.cd_procedimento,
+            trp.cd_ati_med,
+            trp.qt_executada,
+            trp.vl_processado,
+            trp.vl_informado, -- OP25514
+            trp.id_it_envio,
+            trg.nr_senha,
+			trg.nr_guia_operadora
+        from dbamv.tiss_retorno_demon_conta_proc trp,
+             dbamv.tiss_retorno_demon_conta_guia trg,
+             dbamv.tiss_retorno_demon_conta_lote trl
+        where trp.id = pnIdRetorno
+          and trg.id = trp.id_pai
+          and trl.id = trg.id_pai;
+	--
+	  Cursor CProc (pnId_Guia_Envio     in number,      --< Obrigatrio nas 2 opes
+                --
+                pnId_It_Retorno     in number,      --< 1a. Opo
+                pIdLoteRetorno      IN NUMBER,
+                --
+                pvTpTabRet          in varchar2,    --< 2a. Opo
+                pvCdProcedRet       in varchar2,    --< 2a. Opo
+                pvCdAtiMedRet       in varchar2,    --< 2a. Opo
+                pvQtSolRet          in varchar2,    --< 2a. Opo
+                pvVlTotEnvRet       in varchar2     --< 2a. Opo
+                ) Is
+                --
+       Select  ti.id
+              ,ti.tp_tab_fat
+              ,ti.cd_procedimento
+              ,ti.qt_realizada
+              ,ti.vl_total
+         From dbamv.Tiss_Itguia ti,
+              dbamv.Tiss_Guia tg,
+              (select rp.tp_tab_fat
+                     ,rp.cd_procedimento
+                     ,rp.cd_ati_med
+                     ,rp.qt_executada
+                     ,vl_processado
+                     ,vl_informado -- OP25514
+                     ,dt_realizacao
+                  from dbamv.tiss_retorno_demon_conta_proc rp
+                  where pnId_It_Retorno is not null
+                    and rp.id  = pnId_It_Retorno
+                union all
+                select pvTpTabRet       tp_tab_fat
+                      ,pvCdProcedRet    cd_procedimento
+                      ,pvCdAtiMedRet    cd_ati_med
+                      ,pvQtSolRet       qt_executada
+                      ,pvVlTotEnvRet    vl_processado
+                      ,pvVlTotEnvRet    vl_informado -- OP25514
+                      ,To_Char(NULL)    dt_realizacao
+                  from sys.dual
+                  where pnId_It_Retorno is null   ) tri
+        where tg.id              = pnId_Guia_Envio
+          and ti.id_pai          = tg.id
+          AND ti.tp_pagamento    <> 'C'
+          and ti.tp_tab_fat      = nvl(tri.tp_tab_fat,ti.tp_tab_fat)
+          and rtrim(ltrim(ti.cd_procedimento)) = rtrim(ltrim(tri.cd_procedimento))
+          and to_number(ti.qt_realizada,'9999999.9999') = to_number(nvl(tri.qt_executada,ti.qt_realizada),'9999999.9999') -- (estudar caso equipe(?)).
+          and to_number(ti.vl_total,'9999999.99') = to_number(nvl(Nvl(tri.vl_informado,tri.vl_processado),ti.vl_total),'9999999.99')   -- OP25514
+          AND Nvl(Nvl(tri.dt_realizacao,ti.dt_realizado),'X') = Nvl(ti.dt_realizado,'X')  -- xis_marin
+          and not exists (select 'X'
+                            from dbamv.tiss_retorno_demon_conta_proc tri2
+                               , dbamv.tiss_retorno_demon_conta_guia gui2
+                           where tri2.id_it_envio  = ti.id
+                             AND tri2.id_pai = gui2.id
+                             AND  gui2.id_pai = pIdLoteRetorno)
+          --
+        Union all
+          --
+       Select  ti.id
+              ,ti.tp_tab_fat
+              ,ti.cd_procedimento
+              ,ti.qt_realizada
+              ,ti.vl_total
+         From dbamv.Tiss_Itguia_Out ti,
+              dbamv.Tiss_Guia tg,
+              (select rp.tp_tab_fat
+                     ,rp.cd_procedimento
+                     ,rp.cd_ati_med
+                     ,rp.qt_executada
+                     ,vl_processado
+                     ,vl_informado -- OP25514
+                     ,dt_realizacao
+                  from dbamv.tiss_retorno_demon_conta_proc rp
+                  where pnId_It_Retorno is not null
+                    and rp.id  = pnId_It_Retorno
+                union all
+                select pvTpTabRet       tp_tab_fat
+                      ,pvCdProcedRet    cd_procedimento
+                      ,pvCdAtiMedRet    cd_ati_med
+                      ,pvQtSolRet       qt_executada
+                      ,pvVlTotEnvRet    vl_processado
+                      ,pvVlTotEnvRet    vl_informado -- OP25514
+                      ,To_Char(NULL)    dt_realizacao
+                  from sys.dual
+                  where pnId_It_Retorno is null   ) tri
+        where tg.id              = pnId_Guia_Envio
+          and ti.id_pai          = tg.id
+          and ti.tp_tab_fat      = nvl(tri.tp_tab_fat,ti.tp_tab_fat)
+          and rtrim(ltrim(ti.cd_procedimento)) = rtrim(ltrim(tri.cd_procedimento))
+          and to_number(ti.qt_realizada,'9999999.9999')   = to_number(nvl(tri.qt_executada,ti.qt_realizada),'9999999.9999')
+          and to_number(ti.vl_total,'9999999.99')  = to_number(NVL(Nvl(tri.vl_informado,tri.vl_processado),ti.vl_total),'9999999.99') -- OP25514
+          AND Nvl(Nvl(tri.dt_realizacao,ti.dt_realizado),'X') = Nvl(ti.dt_realizado,'X')  -- xis_marin
+          and not exists (select 'X'
+                            from dbamv.tiss_retorno_demon_conta_proc tri2
+                               , dbamv.tiss_retorno_demon_conta_guia gui2
+                           where tri2.id_it_envio  = ti.id
+                             and gui2.id = tri2.id_pai
+                             and  gui2.id_pai = pIdLoteRetorno);
+	--
+  Cursor cItGuia (pnCdAtend in number, pnCdConta in number, pnNrGuia in varchar2, pnLote in varchar2, pnSenha in VARCHAR2, pNrGuiaOperadora in varchar2) Is
+     Select tg.id
+       From dbamv.tiss_guia tg,
+            dbamv.tiss_lote tl
+      Where tg.cd_atendimento                 = pnCdAtend
+        and nvl(tg.cd_reg_fat, tg.cd_reg_amb) = pnCdConta
+      --and tg.nr_guia                        = pnNrGuia
+        and LPad(tg.nr_guia,20,'0')                        = LPad(pnNrGuia,20,'0') --OP 14479 - PDA 638895
+        and tl.id                             = tg.id_pai
+        and tl.nr_lote                        = pnLote
+        AND (nvl(tg.cd_senha,'XXXXXX')         = nvl(pnSenha,'XXXXXX') OR pnSenha IS NULL)
+        AND (nvl(tg.nr_guia_operadora,'XXXXXX') = nvl(pNrGuiaOperadora,'XXXXXX') OR pNrGuiaOperadora IS NULL);
+	--
+ 	Cursor cItFatNF_Tot(pnIdItEnvio in dbamv.itfat_nota_fiscal.id_it_envio%type) is
+    select   itf.id_it_envio
+           ,sum(itf.vl_itfat_nf) vl_itfat_Tot
+      from dbamv.itfat_nota_fiscal itf
+     where itf.id_it_envio  = pnIdItEnvio
+     GROUP BY itf.id_it_envio;
+	--
+  vcRetorno                 cRetorno%rowtype;
+  vcItGuia                  cItGuia%rowtype;
+  vCProc                    CProc%rowtype;
+  vcItFatNF_Tot             cItFatNF_Tot%rowtype;
+  vResult                   number;
+  vDsObservacaoImportacao   dbamv.tiss_retorno_demon_conta_proc.ds_observacao_importacao%type;
+	--
+BEGIN
+	--
+  --
+  open  cRetorno( P_ID_RETORNO, NULL );
+  fetch cRetorno into vcRetorno;
+  close cRetorno;
+  --
+  IF vcRetorno.id_it_envio is not null then -- se j estiver conciliado, s retorna
+    --
+    vResult := vcRetorno.id_it_envio;
+    --
+  ELSIF vcRetorno.id is not null then -- s concilia se encontrou o registro
+    --
+    open cItGuia( vcRetorno.cd_atendimento,vcRetorno.cd_conta,vcRetorno.nr_guia,vcRetorno.nr_lote,vcRetorno.nr_senha,vcRetorno.nr_guia_operadora );
+    fetch cItGuia into vcItGuia;
+    close cItGuia;
+    --
+    if vcItGuia.id is null then
+      --
+       vResult := null;
+       vDsObservacaoImportacao  := 'Não Conciliado. Guia não Identificada';
+      --
+    else
+      --
+      open  CProc( vcItGuia.id, P_ID_RETORNO,P_ID_LOTE_RETORNO,NULL,NULL,NULL,NULL,NULL );
+      fetch CProc into vCProc;
+      close CProc;
+      if vCProc.id is not null then
+        vResult := vCProc.id;    -- Sucesso em identificar o item de envio nas condies normais
+        vDsObservacaoImportacao := NULL;
+      end if;
+      --
+      -- Se no tiver sucesso, faz tentativa completando os digtos para 10 (conv.retorna 8);
+      if vResult is null then
+        vCProc := null;
+        open CProc( vcItGuia.id,
+										NULL,
+                    P_ID_LOTE_RETORNO,
+                    vcRetorno.tp_tab_fat,
+                    '00'||vcRetorno.cd_procedimento,
+                    vcRetorno.cd_ati_med,
+                    vcRetorno.qt_executada,
+                    vcRetorno.vl_informado );
+        fetch CProc into vCProc;
+        close CProc;
+         if vCProc.id is not null then
+          vResult := vCProc.id;
+          vDsObservacaoImportacao := 'Conciliado, mas cod.procedimento difere do enviado ('
+                                    ||vcRetorno.cd_procedimento||'<>'||vCProc.cd_procedimento||')';
+        end if;
+      end if;
+      --
+      -- Se no tiver sucesso, faz tentativa desconsiderando a quantidade;
+      if vResult is null then
+        vCProc := null;
+        open CProc( vcItGuia.id,
+                    NULL,
+                    P_ID_LOTE_RETORNO,
+                    vcRetorno.tp_tab_fat,
+                    vcRetorno.cd_procedimento,
+                    vcRetorno.cd_ati_med,
+                    NULL,
+                    vcRetorno.vl_informado );
+        fetch CProc into vCProc;
+        close CProc;
+        --
+        if vCProc.id is not null then
+          vResult := vCProc.id;
+          vDsObservacaoImportacao := 'Conciliado, mas qt.processada difere do enviado ('
+                                    ||vcRetorno.qt_executada||'<>'||vCProc.qt_realizada||')';
+        end if;
+      end if;
+      --
+      --
+      -- Se no tiver sucesso, faz tentativa desconsiderando o tipo de tabela;
+      if vResult is null then
+        vCProc := null;
+        open CProc( vcItGuia.id,
+                    NULL,
+                    P_ID_LOTE_RETORNO,
+                    NULL,
+                    vcRetorno.cd_procedimento,
+                    vcRetorno.cd_ati_med,
+                    vcRetorno.qt_executada,
+                    vcRetorno.vl_informado );
+        fetch CProc into vCProc;
+        close CProc;
+        if vCProc.id is not null then
+          vResult := vCProc.id;
+          vDsObservacaoImportacao := 'Conciliado, mas tp.tabela difere do enviado ('
+                                     ||vcRetorno.tp_tab_fat||'<>'||vCProc.tp_tab_fat||')';
+        end if;
+      end if;
+      -- Se no tiver sucesso, faz as 3 tentativas anteriores juntas
+      if vResult is null then
+        vCProc := null;
+        open CProc( vcItGuia.id,
+                    NULL,
+                    P_ID_LOTE_RETORNO,
+                    NULL,
+                    '00'||vcRetorno.cd_procedimento,
+                    vcRetorno.cd_ati_med,
+                    NULL,
+                    vcRetorno.vl_informado );
+        fetch CProc into vCProc;
+        close CProc;
+        if vCProc.id is not null then
+          vResult := vCProc.id;
+          vDsObservacaoImportacao := 'Conciliado, mas tp.tabela,cod.procedto,qtde. diferem do enviado';
+        end if;
+      end if;
+      --
+      -- Checagem pra conferir se a conciliao inicial do envio est correta
+      -- ,caso contrrio, anula a conciliao do Retorno.
+      if vResult is not null then
+        open  cItFatNF_Tot(vResult);
+        fetch cItFatNF_Tot into vcItFatNF_Tot;
+        close cItFatNF_Tot;
+        if nvl(vcItFatNF_Tot.vl_itfat_Tot,0)<>nvl(to_number(Nvl(vcRetorno.vl_informado,vcRetorno.vl_processado),'9999999.99'),0) then    -- OP25514
+          vDsObservacaoImportacao := 'Não Conciliado. Falha na conciliação no envio. '||'Retorno='||vcRetorno.id||', ID Envio='||vResult||' | NF: '||nvl(To_Char(vcItFatNF_Tot.vl_itfat_Tot),'S/NF');
+          vResult := Null;
+        end if;
+      else
+        vResult := Null;
+        vDsObservacaoImportacao := 'Não Conciliado. Item não identificado.';
+      end if;
+    end if;
+    -- GRAVA resultado da conciliao
+    -- =========================================================
+    IF P_GRAVA_ACAO = 'SIM' THEN
+      UPDATE dbamv.tiss_retorno_demon_conta_proc
+         SET id_it_envio = vResult
+            ,ds_observacao_importacao = vDsObservacaoImportacao
+       WHERE id = vcRetorno.id;
+     END IF;
+    -- =========================================================
+    --
+  END IF;
+   -- OP 30035
+   -- Aps Conciliar (acima). O sistema remove algumas conciliaes relacionadas  Credenciados
+   -- retornados conciliados por engano por ter valores e dados semelhantes.
+	 FOR V IN (SELECT ID
+	                , VL_INFORMADO
+	                , ID_IT_ENVIO
+	   					 FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PROC
+	 	          WHERE ID = P_ID_RETORNO) LOOP
+     BEGIN
+         vResult:= NULL;
+         vDsObservacaoImportacao:= 'Não Conciliado. Item não faturado/cobrado';
+       IF P_GRAVA_ACAO = 'SIM' THEN
+/*
+         UPDATE DBAMV.TISS_RETORNO_DEMON_CONTA_PROC
+            SET ID_IT_ENVIO = vResult
+              , DS_OBSERVACAO_IMPORTACAO = vDsObservacaoImportacao
+          WHERE ID = V.ID
+            AND ID_IT_ENVIO IS NOT NULL
+            AND NOT EXISTS (SELECT 'X'
+                              FROM DBAMV.ITFAT_NOTA_FISCAL ITF
+                             WHERE ITF.VL_ITFAT_NF = TO_NUMBER(V.VL_INFORMADO,'9999999.99')
+                               AND ITF.ID_IT_ENVIO = V.ID_IT_ENVIO);
+*/
+         -- Resolve o problema dos agrupados.
+/*
+         UPDATE DBAMV.TISS_RETORNO_DEMON_CONTA_PROC
+            SET ID_IT_ENVIO = vResult
+              , DS_OBSERVACAO_IMPORTACAO = vDsObservacaoImportacao
+          WHERE ID = V.ID
+            AND ID_IT_ENVIO IS NOT NULL
+            AND ID_IT_ENVIO NOT IN (SELECT ITFAT.ID_IT_ENVIO
+                                      FROM TISS_RETORNO_DEMON_CONTA_PROC PRC
+                                         , (SELECT ITF.ID_IT_ENVIO
+                                                 , SUM(ITF.VL_ITFAT_NF) VL_ITFAT_NF
+                                              FROM DBAMV.ITFAT_NOTA_FISCAL ITF
+                                             WHERE ITF.ID_IT_ENVIO = V.ID_IT_ENVIO
+                                             GROUP BY ITF.ID_IT_ENVIO) ITFAT
+                                     WHERE ITFAT.ID_IT_ENVIO = PRC.ID_IT_ENVIO
+                                       AND ITFAT.VL_ITFAT_NF = To_Number(V.VL_INFORMADO,'99999999.99')
+                                       AND PRC.ID = V.ID);
+*/
+NULL;
+       END IF;
+     EXCEPTION
+       WHEN OTHERS THEN
+         NULL;
+     END;
+   END LOOP;
+  --
+  IF P_TIPO_RETORNO = 'ID_CONCIL' THEN
+    RETURN vResult;
+  ELSE
+    RETURN vDsObservacaoImportacao;
+  END IF;
+  --
+END F_CONCILIA_IT_RETORNO;
+PROCEDURE P_CONCILIA_IT_RETORNO(P_ID_LOTE IN NUMBER, P_MSG_ERRO OUT VARCHAR2) IS
+  N_ID_CONCIL NUMBER;
+BEGIN
+  -- Realiza a Conciliao de Retorno
+	FOR R_ITEM IN (SELECT PROC.ID ID_PROC
+                      , GUIA.ID_PAI ID_LOTE
+							     FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PROC PROC
+                      , DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA GUIA
+							    WHERE GUIA.ID = PROC.ID_PAI
+                    AND PROC.ID_PAI IN (SELECT ID
+									     						        FROM  DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA
+                   		    				       WHERE ID_PAI = P_ID_LOTE) ) LOOP
+    N_ID_CONCIL	:= TO_NUMBER(F_CONCILIA_IT_RETORNO(R_ITEM.ID_PROC,R_ITEM.ID_LOTE,'ID_CONCIL','SIM'));
+	END LOOP;
+EXCEPTION
+  WHEN OTHERS THEN
+    P_MSG_ERRO:= 'P_CONCILICA_IT_RETORNO | '||SQLERRM||Chr(10)||'('||P_ID_LOTE||')';
+END P_CONCILIA_IT_RETORNO;
+PROCEDURE P_ABRE_DADOS_CONVENIO(P_CD_CONVENIO IN NUMBER, P_MSG_ERRO OUT VARCHAR2) IS
+  eERRO     EXCEPTION;
+  vMSG_ERRO VARCHAR2(2000);
+BEGIN
+  IF P_CD_CONVENIO IS NULL THEN
+		vMSG_ERRO:= 'ATENÇÃO: Parmetro essencial de Convenio não foi passado.';
+    RAISE eERRO;
+  END IF;
+  OPEN C_CONVENIO(P_CD_CONVENIO);
+    IF C_CONVENIO%NOTFOUND THEN
+      CLOSE C_CONVENIO;
+  		vMSG_ERRO:= 'ATENCÃO: Configurações gerais do convenio('||P_CD_CONVENIO||') não encontrado!';
+      RAISE eERRO;
+    END IF;
+    FETCH C_CONVENIO INTO R_CONVENIO;
+  CLOSE C_CONVENIO;
+  G_CD_CONVENIO:= P_CD_CONVENIO;
+  IF R_CONVENIO.CD_MOTIVO_GLOSA IS NULL THEN
+		vMSG_ERRO:= 'ATENCÃO: O Campo "Codigo de Motivo de Glosa padrão" não foi informado. Verifique a configuração de retorno da geração de fatura!';
+    RAISE eERRO;
+  END IF;
+
+/*
+  IF R_CONVENIO.DS_MOVIMENTACAO IS NULL THEN
+		vMSG_ERRO:= 'ATENCÃO: O Campo "Descrição da Movimentação" não foi informado. Verifique a configuração de retorno da geração de fatura!';
+    RAISE eERRO;
+  END IF;
+*/
+  G_CD_MOTIVO_GLOSA_CONV:= R_CONVENIO.CD_MOTIVO_GLOSA;
+  G_DS_MOVIMENTACAO_CONV:= R_CONVENIO.DS_MOVIMENTACAO;
+EXCEPTION
+  WHEN eERRO THEN
+    P_MSG_ERRO:= vMSG_ERRO;
+END P_ABRE_DADOS_CONVENIO;
+FUNCTION F_TRADUZ_PROC_REVERSO(P_CD_CONVENIO IN NUMBER, P_CD_MOTIVO_GLOSA IN NUMBER, P_MSG_ERRO OUT VARCHAR2) RETURN VARCHAR2 IS
+  V_RETORNO  VARCHAR2(2000);
+  V_MSG_ERRO VARCHAR2(2000);
+  eERRO      EXCEPTION;
+BEGIN
+				V_RETORNO := DBAMV.FNC_FFCV_GERA_TISS (P_CD_CONVENIO        	--convenio
+                                      ,'FNC_TRADUZ_PROC_REVERSO'   		--pNmFuncao
+                                      ,TO_CHAR(P_CD_CONVENIO)	        --pParam1
+                                      ,NULL                        		--pParam2
+                                      ,P_CD_MOTIVO_GLOSA          		--pParam3
+                                      ,NULL                        		--pParam4
+                                      ,'CD_MOTIVO_GLOSA'           		--pParam5
+                                      ,NULL                        		--pParam6
+                                      ,NULL                        		--pParam7
+                                      ,NULL                        		--pParam8
+                                      ,NULL                        		--pParam9
+                                      ,V_MSG_ERRO                  		--pMsg
+                                      ,NULL);                      		--pReserva
+  IF V_MSG_ERRO IS NOT NULL THEN
+    RAISE eERRO;
+  END IF;
+  RETURN V_RETORNO;
+EXCEPTION
+  WHEN eERRO THEN
+    P_MSG_ERRO:= 'F_TRADUZ_PROC_REVERSO_1 | '||V_MSG_ERRO;
+    RETURN V_RETORNO;
+  WHEN OTHERS THEN
+    RAISE_APPLICATION_ERROR(-20900,'F_TRADUZ_PROC_REVERSO_2 | '||SQLERRM);
+END F_TRADUZ_PROC_REVERSO;
+
+PROCEDURE P_CARREGA_DADOS(P_CD_CONVENIO NUMBER, P_NR_LOTE VARCHAR2, P_CD_REMESSA IN NUMBER,P_MSG_ERRO OUT VARCHAR2) IS
+	--
+	R_LOTE_RETORNO    C_LOTE_RETORNO%ROWTYPE;
+	R_LOTE_ENVIO			C_LOTE_ENVIO%ROWTYPE;
+	R_NOTA_FISCAL			C_NOTA_FISCAL%ROWTYPE;
+	--
+  vMSG_ERRO         VARCHAR2(2000);
+  eERRO             EXCEPTION;
+BEGIN
+	-- Seta ponto forado para mscaras
+  DBMS_SESSION.SET_NLS('NLS_NUMERIC_CHARACTERS','''.,''');
+  P_ABRE_DADOS_CONVENIO(P_CD_CONVENIO,vMSG_ERRO);
+  IF vMSG_ERRO IS NOT NULL THEN
+    RAISE eERRO;
+  END IF;
+  G_CD_CONVENIO:= P_CD_CONVENIO;
+  R_LOTE_RETORNO:= NULL;
+  OPEN C_LOTE_RETORNO(P_CD_CONVENIO, P_NR_LOTE,NULL,P_CD_REMESSA);
+    FETCH C_LOTE_RETORNO INTO R_LOTE_RETORNO;
+  CLOSE C_LOTE_RETORNO;
+  R_LOTE_ENVIO:= NULL;
+  OPEN C_LOTE_ENVIO(R_LOTE_RETORNO.ID_MENSAGEM_ENVIO);
+    FETCH C_LOTE_ENVIO INTO R_LOTE_ENVIO;
+  CLOSE C_LOTE_ENVIO;
+  OPEN C_LOTE_RETORNO(P_CD_CONVENIO,P_NR_LOTE,R_LOTE_RETORNO.ID_TM_DD,P_CD_REMESSA);
+	LOOP
+		FETCH C_LOTE_RETORNO INTO R_LOTE_RETORNO;
+		IF C_LOTE_RETORNO%FOUND THEN
+			-- Obter dados do Lote de Envio
+			OPEN 	C_LOTE_ENVIO(R_LOTE_RETORNO.ID_MENSAGEM_ENVIO);
+			FETCH C_LOTE_ENVIO INTO R_LOTE_ENVIO;
+			IF C_LOTE_ENVIO%NOTFOUND THEN
+				CLOSE C_LOTE_ENVIO;
+				CLOSE C_LOTE_RETORNO;
+				RAISE_APPLICATION_ERROR(-20990,'Atenção: Falha na obtenção dos dados do Lote de Envio.'||chr(10)||'Possivel falha na importação da Transação, ou nos dados do Envio.');
+			END IF;
+			CLOSE C_LOTE_ENVIO;
+			-- Obter dados da Nota Fiscal
+			OPEN C_NOTA_FISCAL(R_LOTE_ENVIO.CD_REMESSA);
+			  FETCH C_NOTA_FISCAL INTO R_NOTA_FISCAL;
+			  IF C_NOTA_FISCAL%NOTFOUND THEN
+				CLOSE C_NOTA_FISCAL;
+				CLOSE C_LOTE_RETORNO;
+        RAISE_APPLICATION_ERROR(-20991,'Atenção: Nota Fiscal da remessa '||R_LOTE_ENVIO.CD_REMESSA||
+									                    ' referente ao Lote '||R_LOTE_RETORNO.NR_LOTE||' não encontrada.'||chr(10)||
+									                    'Possivel falha na importação ou Financeiro/Faturamento não configurado.');
+			ELSE
+				IF C_NOTA_FISCAL%ROWCOUNT > 1 THEN
+					CLOSE C_NOTA_FISCAL;
+					CLOSE C_LOTE_RETORNO;
+					RAISE_APPLICATION_ERROR(-20992,'Atenção: A Remessa '||R_LOTE_ENVIO.CD_REMESSA||
+										' referente ao Lote '||R_LOTE_RETORNO.NR_LOTE||' Possui mais de uma Nota Fiscal.'||chr(10)||
+										'Configuração não atendida pela Importação Eletronica');
+				END IF;
+				CLOSE C_NOTA_FISCAL;
+			END IF;
+			--
+			G_NR_NOTA_FISCAL_LOTE		:=	TO_CHAR(R_NOTA_FISCAL.NR_ID_NOTA_FISCAL);
+			G_CD_NOTA_FISCAL				:=	R_NOTA_FISCAL.CD_NOTA_FISCAL;
+			G_ID_LOTE								:=	R_LOTE_RETORNO.ID_TLD;
+			G_ID_PAI								:=	R_LOTE_RETORNO.ID_TDC;
+			G_ID_MENSAGEM_ENVIO			:=	R_LOTE_RETORNO.ID_MENSAGEM_ENVIO;
+			G_CD_REMESSA_LOTE				:=	R_LOTE_ENVIO.CD_REMESSA;
+			G_CD_REMESSA_GLOSA_LOTE	:=	R_LOTE_ENVIO.CD_REMESSA_GLOSA;
+			G_NR_LOTE								:=	R_LOTE_RETORNO.NR_LOTE;
+			G_NR_PROTOCOLO					:=	R_LOTE_RETORNO.NR_PROTOCOLO_RETORNO;
+			G_VL_FATURADO						:=	NVL(R_LOTE_ENVIO.VL_TOTAL_LOTE,0);
+			G_VL_GLOSA							:=	NVL(R_LOTE_RETORNO.VL_GLOSA,0);
+			G_VL_LIBERADO					  :=	NVL(R_LOTE_RETORNO.VL_PROTOCOLO,0);
+			G_ID_MSG_RETORNO				:=  R_LOTE_RETORNO.ID_TM_DD;
+			--
+			-- Totalizadores
+			G_VL_TOT_FATURADO				:=	G_VL_TOT_FATURADO       + G_VL_FATURADO;
+			G_VL_TOT_DECL_GLOSA			:=	G_VL_TOT_DECL_GLOSA			+	G_VL_GLOSA;
+			G_VL_TOT_DECL_LIBERADO	:=	G_VL_TOT_DECL_LIBERADO	+	G_VL_LIBERADO;
+			--
+		ELSE
+			IF NVL(C_LOTE_RETORNO%ROWCOUNT,0) = 0 THEN
+				CLOSE C_LOTE_RETORNO;
+				RAISE_APPLICATION_ERROR(-20993,'Lote informado, não possui retorno em aberto, Ou ja foi baixado anteriormente.');
+			END IF;
+			CLOSE C_LOTE_RETORNO;
+			EXIT;
+		END IF;
+		--
+	END LOOP;
+  --
+EXCEPTION
+  WHEN eERRO THEN
+    P_MSG_ERRO:= vMSG_ERRO;
+  WHEN OTHERS THEN
+    P_MSG_ERRO:= 'P_CARREGA_DADOS | '||SQLERRM;
+END P_CARREGA_DADOS;
+
+PROCEDURE P_DAC_CARREGA_DADOS(pIdMsgLoteEnvio IN NUMBER,tDadosApuracao IN OUT recDadosApuracao, pMsgErro OUT VARCHAR2) IS
+	--
+  CURSOR cMSG_RETORNO_DAC(pIdMsgLoteEnvio  NUMBER) IS
+    SELECT DAC.ID ID_DAC
+         , DLT.ID ID_DLT
+         , MSG.ID MSG_DAC
+         , DLT.NR_LOTE
+				 , MSG.NR_PROTOCOLO_RETORNO
+         , MSG.CD_CONVENIO
+         , MSG.NR_DOCUMENTO CD_REMESSA
+				 , DLT.DT_PROCESSADO
+				 , DLT.CD_USUARIO_PROCESSOU
+				 , TO_NUMBER(DLT.VL_PROTOCOLO,'999999999999.99') VL_PROTOCOLO
+				 , TO_NUMBER(DLT.VL_INFORMADO_PROTOCOLO,'999999999999.99') VL_INFORMADO_PROTOCOLO
+				 , TO_NUMBER(DLT.VL_GLOSA,'999999999999.99') VL_GLOSA
+      FROM DBAMV.TISS_MENSAGEM                 MSG
+         , DBAMV.TISS_RETORNO_DEMON_CONTA      DAC
+         , DBAMV.TISS_RETORNO_DEMON_CONTA_LOTE DLT
+     WHERE MSG.TP_TRANSACAO = 'DEMONSTRATIVO_ANALISE_CONTA'
+       AND MSG.ID = DAC.ID_PAI
+       AND DAC.ID = DLT.ID_PAI
+  	  	AND NVL(MSG.CD_STATUS,'PS')		<>	'CA'
+       AND MSG.ID_MENSAGEM_ORIGEM = pIdMsgLoteEnvio
+	   ORDER BY MSG.ID DESC;
+
+  CURSOR cDADOS_CONVENIO(P_EMPRESA NUMBER, P_CONVENIO NUMBER) IS
+		SELECT CONVENIO.NM_CONVENIO
+		 		 , CONVENIO.CD_CON_COR
+				 , CONVENIO.DS_MOVIMENTACAO
+				 , CONVENIO.CD_MOTIVO_GLOSA
+         , 'S' SN_CONSIDERA_NF
+		  FROM DBAMV.CONVENIO
+		     , DBAMV.EMPRESA_CONVENIO
+		WHERE TP_CONVENIO = 'C'
+		  AND NVL(SN_FILANTROPIA,'N') = 'N'
+      AND EMPRESA_CONVENIO.CD_CONVENIO = CONVENIO.CD_CONVENIO
+      AND EMPRESA_CONVENIO.CD_MULTI_EMPRESA = P_EMPRESA
+		  AND CONVENIO.CD_CONVENIO = P_CONVENIO;
+
+	CURSOR cNOTA_FISCAL(P_CD_REMESSA NUMBER) IS
+		SELECT NF.CD_NOTA_FISCAL
+				 , NF.NR_ID_NOTA_FISCAL
+		FROM DBAMV.NOTA_FISCAL NF,
+			(SELECT DISTINCT CD_NOTA_FISCAL
+				FROM DBAMV.ITFAT_NOTA_FISCAL
+				WHERE CD_REMESSA =  P_CD_REMESSA
+			GROUP BY CD_NOTA_FISCAL) ITF
+		WHERE ITF.CD_NOTA_FISCAL = NF.CD_NOTA_FISCAL;
+
+  CURSOR cREMESSA_FATURA(P_CD_REMESSA NUMBER) IS
+   SELECT FATURA.CD_MULTI_EMPRESA
+     FROM DBAMV.REMESSA_FATURA REMESSA
+        , DBAMV.FATURA FATURA
+    WHERE REMESSA.CD_FATURA = FATURA.CD_FATURA
+      AND REMESSA.CD_REMESSA = P_CD_REMESSA;
+
+	rMSG_RETORNO_DAC    cMSG_RETORNO_DAC%ROWTYPE;
+  rCONVENIO           cDADOS_CONVENIO%ROWTYPE;
+  rNOTA_FISCAL        cNOTA_FISCAL%ROWTYPE;
+  rREMESSA_FATURA     cREMESSA_FATURA%ROWTYPE;
+	--
+  vMsgErro            VARCHAR2(2000);
+  eERRO               EXCEPTION;
+
+BEGIN
+	-- Seta ponto forado para mscaras
+  DBMS_SESSION.SET_NLS('NLS_NUMERIC_CHARACTERS','''.,''');
+
+  OPEN cMSG_RETORNO_DAC(pIdMsgLoteEnvio);
+    FETCH cMSG_RETORNO_DAC INTO rMSG_RETORNO_DAC;
+    IF cMSG_RETORNO_DAC%NOTFOUND THEN
+      CLOSE cMSG_RETORNO_DAC;
+  		vMsgErro:= 'ATENCÃO: Não foi encontrado um retorno válido de demonstrativo de análise de contas!';
+      RAISE eERRO;
+    END IF;
+  CLOSE cMSG_RETORNO_DAC;
+
+
+  tDadosApuracao.ID_MSG_ORIGEM   := pIdMsgLoteEnvio;
+  tDadosApuracao.ID_DAC          := rMSG_RETORNO_DAC.ID_DAC;
+  tDadosApuracao.ID_DLT          := rMSG_RETORNO_DAC.ID_DLT;
+
+  tDadosApuracao.CD_CONVENIO     := rMSG_RETORNO_DAC.CD_CONVENIO;
+  tDadosApuracao.CD_REMESSA      := rMSG_RETORNO_DAC.CD_REMESSA;
+  tDadosApuracao.NR_LOTE         := rMSG_RETORNO_DAC.NR_LOTE;
+  tDadosApuracao.NR_PROTOCOLO    := rMSG_RETORNO_DAC.NR_PROTOCOLO_RETORNO;
+  --
+  tDadosApuracao.VL_DECLARADO    := rMSG_RETORNO_DAC.VL_INFORMADO_PROTOCOLO;
+  tDadosApuracao.VL_DEC_GLOSA    := rMSG_RETORNO_DAC.VL_GLOSA;
+  tDadosApuracao.VL_DEC_LIBERADO := rMSG_RETORNO_DAC.VL_PROTOCOLO;
+
+  OPEN cREMESSA_FATURA(tDadosApuracao.CD_REMESSA);
+    IF cREMESSA_FATURA%NOTFOUND THEN
+      CLOSE cREMESSA_FATURA;
+  		vMsgErro:= 'ATENCÃO: Falha ao capturar empresa da remessa ('||tDadosApuracao.CD_REMESSA||')!';
+      RAISE eERRO;
+    END IF;
+    FETCH cREMESSA_FATURA INTO rREMESSA_FATURA;
+  CLOSE cREMESSA_FATURA;
+
+  tDadosApuracao.CD_MULTI_EMPRESA:= rREMESSA_FATURA.CD_MULTI_EMPRESA;
+
+  OPEN cDADOS_CONVENIO(tDadosApuracao.CD_MULTI_EMPRESA,tDadosApuracao.CD_CONVENIO);
+    FETCH cDADOS_CONVENIO INTO rCONVENIO;
+    IF cDADOS_CONVENIO%NOTFOUND THEN
+      CLOSE cDADOS_CONVENIO;
+  		vMsgErro:= 'ATENCÃO: Configurações gerais do convenio('||tDadosApuracao.CD_CONVENIO||') não encontrado!';
+      RAISE eERRO;
+    END IF;
+  CLOSE cDADOS_CONVENIO;
+
+  IF rCONVENIO.CD_MOTIVO_GLOSA IS NULL THEN
+		vMsgErro:= 'ATENCÃO: O Campo "Codigo de Motivo de Glosa padrão" não foi informado. Verifique a configuração de retorno da geração de fatura!';
+    RAISE eERRO;
+  END IF;
+
+  tDadosApuracao.CD_MOTIVO_GLOSA:= rCONVENIO.CD_MOTIVO_GLOSA;
+  tDadosApuracao.SN_CONSIDERA_NF:= rCONVENIO.SN_CONSIDERA_NF;
+
+
+
+  OPEN cNOTA_FISCAL(tDadosApuracao.CD_REMESSA);
+    FETCH cNOTA_FISCAL INTO rNOTA_FISCAL;
+  	IF cNOTA_FISCAL%ROWCOUNT > 1 THEN
+	 	  CLOSE cNOTA_FISCAL;
+			vMsgErro:= 'ATENÇÃO: A Remessa '||tDadosApuracao.CD_REMESSA||
+								 ' referente ao Lote '||tDadosApuracao.NR_LOTE||' Possui mais de uma Nota Fiscal.'||chr(10)||
+								 'Configuração não atendida pela Importação Eletronica';
+      RAISE eERRO;
+    END IF;
+
+  	IF cNOTA_FISCAL%NOTFOUND THEN
+	 	  CLOSE cNOTA_FISCAL;
+      vMsgErro:= 'ATENÇÃO: Nota Fiscal da remessa '||tDadosApuracao.CD_REMESSA||
+		             ' referente ao Lote '||tDadosApuracao.NR_LOTE||' não encontrada.'||chr(10)||
+				         'Possivel falha na importação ou Financeiro/Faturamento não configurado.';
+      RAISE eERRO;
+    END IF;
+  CLOSE cNOTA_FISCAL;
+
+  tDadosApuracao.CD_NOTA_FISCAL:= rNOTA_FISCAL.CD_NOTA_FISCAL;
+
+
+EXCEPTION
+  WHEN eERRO THEN
+    pMsgErro:= vMsgErro;
+
+  WHEN OTHERS THEN
+    pMsgErro:= 'P_DAC_CARREGA_DADOS | '||SQLERRM;
+
+END P_DAC_CARREGA_DADOS;
+
+
+FUNCTION F_CONC_GLOSA_AGP(P_ID_IT_ENVIO IN NUMBER, P_CD_ITFAT_NF IN NUMBER) RETURN VARCHAR2 IS
+  CURSOR C_DADOS IS
+    SELECT ITN.CD_PRO_FAT CD_PRO_FAT_NF
+         , SUM(ITN.QT_ITFAT_NF) QT_ITFAT_NF
+         , SUM(ITN.VL_ITFAT_NF) VL_ITFAT_NF
+         , ITN.VL_ITFAT_NF      VL_ITFAT_UNIT
+         , TO_NUMBER(QT_EXECUTADA) QT_EXECUTADA
+         , TO_NUMBER(VL_INFORMADO,'9999999999.99') VL_INFORMADO
+         , TO_NUMBER(VL_PROCESSADO,'9999999999.99') VL_PROCESSADO
+         , TO_NUMBER(VL_GLOSADO,'9999999999.99') VL_GLOSADO
+         , TRUNC(TO_NUMBER(VL_GLOSADO,'9999999999.99') / TO_NUMBER(QT_EXECUTADA),2) GLOSA_POR_ITEM
+         , Mod(TO_NUMBER(VL_GLOSADO,'9999999999.99'),TO_NUMBER(QT_EXECUTADA)) RESTO
+      FROM DBAMV.ITFAT_NOTA_FISCAL ITN
+         , DBAMV.TISS_RETORNO_DEMON_CONTA_PROC ITR
+	   WHERE ITN.ID_IT_ENVIO = ITR.ID_IT_ENVIO
+       AND ITN.ID_IT_ENVIO = P_ID_IT_ENVIO
+     GROUP BY ITN.CD_PRO_FAT
+         , TO_NUMBER(QT_EXECUTADA)
+         , TO_NUMBER(VL_INFORMADO,'9999999999.99')
+         , TO_NUMBER(VL_PROCESSADO,'9999999999.99')
+         , To_Number(VL_GLOSADO,'9999999999.99')
+         , ITN.VL_ITFAT_NF;
+  N_ACHOU   NUMBER;
+  eSAIDA    EXCEPTION;
+  R_DADOS   C_DADOS%ROWTYPE;
+  ITFAT_NF  NUMBER;
+BEGIN
+  -- Se houve agrupamento
+  SELECT COUNT(*)
+    INTO N_ACHOU
+    FROM DBAMV.ITFAT_NOTA_FISCAL
+	 WHERE ID_IT_ENVIO = P_ID_IT_ENVIO;
+  IF N_ACHOU <=  1 THEN
+    RAISE eSAIDA;
+    --RETURN 'S';
+  END IF;
+  OPEN C_DADOS;
+  FETCH C_DADOS INTO R_DADOS;
+  CLOSE C_DADOS;
+  IF R_DADOS.GLOSA_POR_ITEM > 0 AND R_DADOS.RESTO = 0 THEN
+    RAISE eSAIDA;
+  END IF;
+  IF Nvl(R_DADOS.VL_GLOSADO,0) = 0 THEN
+    RAISE eSAIDA;
+  END IF;
+  IF R_DADOS.GLOSA_POR_ITEM > R_DADOS.VL_ITFAT_NF THEN
+    RETURN 'E';
+  END IF;
+   -- Elege o primeiro item para receber a glosa.
+  SELECT Min(CD_ITFAT_NF) CD_ITFAT_NF
+    INTO ITFAT_NF
+    FROM DBAMV.ITFAT_NOTA_FISCAL
+	 WHERE ID_IT_ENVIO = P_ID_IT_ENVIO;
+  IF ITFAT_NF = P_CD_ITFAT_NF THEN
+    RETURN 'S';
+  END IF;
+  RETURN 'N';
+  EXCEPTION
+    WHEN eSAIDA THEN
+      RETURN 'X';
+  END F_CONC_GLOSA_AGP;
+
+FUNCTION F_DADO_GLOSA(P_ID_PROC IN NUMBER, P_ID_GLOSA IN NUMBER,P_TIPO_RETORNO IN VARCHAR2) RETURN VARCHAR2 IS
+    CURSOR C_ITEM_PROCEDIMENTO IS
+      SELECT CD_MOTIVO_GLOSA
+           , DS_MOTIVO_GLOSA
+           , VL_GLOSA
+           , CD_MOT_GLOSA
+        FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PRC_G
+       WHERE ID_PAI = P_ID_PROC;
+  R_ITEM_PROCEDIMENTO1 C_ITEM_PROCEDIMENTO%ROWTYPE;
+  R_ITEM_PROCEDIMENTO2 C_ITEM_PROCEDIMENTO%ROWTYPE;
+  R_ITEM_PROCEDIMENTO3 C_ITEM_PROCEDIMENTO%ROWTYPE;
+BEGIN
+  OPEN C_ITEM_PROCEDIMENTO;
+    FETCH C_ITEM_PROCEDIMENTO INTO R_ITEM_PROCEDIMENTO1;
+    FETCH C_ITEM_PROCEDIMENTO INTO R_ITEM_PROCEDIMENTO2;
+    FETCH C_ITEM_PROCEDIMENTO INTO R_ITEM_PROCEDIMENTO3;
+  CLOSE C_ITEM_PROCEDIMENTO;
+  IF P_ID_GLOSA = 1 THEN
+    IF P_TIPO_RETORNO = 'CODIGO_MV' THEN
+      RETURN R_ITEM_PROCEDIMENTO1.CD_MOT_GLOSA;
+    END IF;
+    IF P_TIPO_RETORNO = 'VALOR' THEN
+      RETURN R_ITEM_PROCEDIMENTO1.VL_GLOSA;
+    END IF;
+  END IF;
+  IF P_ID_GLOSA = 2 THEN
+    IF P_TIPO_RETORNO = 'CODIGO_MV' THEN
+      RETURN R_ITEM_PROCEDIMENTO2.CD_MOT_GLOSA;
+    END IF;
+    IF P_TIPO_RETORNO = 'VALOR' THEN
+      RETURN R_ITEM_PROCEDIMENTO2.VL_GLOSA;
+    END IF;
+  END IF;
+  IF P_ID_GLOSA = 3 THEN
+    IF P_TIPO_RETORNO = 'CODIGO_MV' THEN
+      RETURN R_ITEM_PROCEDIMENTO3.CD_MOT_GLOSA;
+    END IF;
+    IF P_TIPO_RETORNO = 'VALOR' THEN
+      RETURN R_ITEM_PROCEDIMENTO3.VL_GLOSA;
+    END IF;
+  END IF;
+END F_DADO_GLOSA;
+
+FUNCTION F_CABECALHO_RETORNO_LOTE_TISS(pFinanReceb tpFinanReceb) RETURN NUMBER IS
+  nID    NUMBER;
+BEGIN
+  IF pFinanReceb.CD_FINAN_RECEB IS NULL THEN
+    IF F_EXISTE_RETORNO_LOTE_TISS(G_ID_LOTE) THEN
+      DELETE DBAMV.FINAN_RECEB
+       WHERE CD_ORIGEM = G_ID_LOTE
+         AND TP_ORIGEM = 'TISS_LOTE_APURACAO';
+    END IF;
+
+    SELECT DBAMV.SEQ_FINAN_RECEB.NEXTVAL
+      INTO nID
+      FROM DUAL;
+
+    INSERT INTO DBAMV.FINAN_RECEB
+      (CD_FINAN_RECEB
+      ,CD_CONVENIO
+      ,CD_USUARIO_IMPO
+      ,CD_ORIGEM
+      ,DT_IMPORTACAO
+      ,TP_ORIGEM
+      ,CD_NOTA_FISCAL
+      ,CD_CON_REC
+      ,CD_ITCON_REC
+      ,CD_REMESSA
+      ,CD_REMESSA_GLOSA
+      ,NR_LOTE
+      ,CD_PROTOCOLO
+      ,VL_INFORMADO
+      ,VL_PROCESSADO
+      ,VL_LIBERADO
+	  ,CD_EMPRESA_LOGADA)
+    VALUES
+      (nID
+      ,G_CD_CONVENIO
+      --aki
+      ,user
+      ,G_ID_LOTE
+      ,SYSDATE
+      ,'TISS_LOTE_APURACAO'
+      ,G_CD_NOTA_FISCAL
+      ,pFinanReceb.cd_con_rec
+      ,pFinanReceb.cd_itcon_rec
+      ,G_CD_REMESSA_LOTE
+	    ,G_CD_REMESSA_GLOSA_LOTE
+      ,G_NR_LOTE
+      ,G_NR_PROTOCOLO
+      ,Nvl(pFinanReceb.VL_INFORMADO, 0)
+      ,Nvl(pFinanReceb.VL_PROCESSADO, 0)
+      ,Nvl(pFinanReceb.VL_LIBERADO, 0)
+	  ,DBAMV.PKG_MV2000.LE_EMPRESA);
+  ELSE
+    UPDATE DBAMV.FINAN_RECEB
+       SET VL_INFORMADO         = Nvl(pFinanReceb.VL_INFORMADO,0)
+         , VL_PROCESSADO        = Nvl(pFinanReceb.VL_PROCESSADO,0)
+         , VL_LIBERADO          = Nvl(pFinanReceb.VL_LIBERADO,0)
+         , VL_GLOSADO           = Nvl(pFinanReceb.VL_GLOSADO,0)
+         , VL_ACRESCIMO         = Nvl(pFinanReceb.VL_ACRESCIMO,0)
+         , VL_DESCONTO          = pFinanReceb.VL_DESCONTO
+         , VL_IMPOSTO           = pFinanReceb.VL_IMPOSTO
+         , VL_INVALIDO          = Nvl(pFinanReceb.VL_INVALIDO,0)
+     WHERE CD_FINAN_RECEB = pFinanReceb.CD_FINAN_RECEB;
+  END IF;
+
+  RETURN Nvl(nID, pFinanReceb.CD_FINAN_RECEB);
+
+END F_CABECALHO_RETORNO_LOTE_TISS;
+
+
+FUNCTION F_DAC_DADOS_FINAN_RECEB(tFinanReceb IN OUT tpFinanReceb,tDadosApuracao IN OUT recDadosApuracao) RETURN NUMBER IS
+
+  CURSOR cFinanRecebItem(pCD_FINAN_RECEB NUMBER) IS
+    SELECT Sum(VL_LIBERADO) VL_LIBERADO
+         , Sum(VL_GLOSADO) VL_GLOSADO
+         , Sum(VL_ACRESCIMO) VL_ACRESCIMO
+         , Sum(VL_DESCONTO) VL_DESCONTO
+         , Sum(VL_IMPOSTO) VL_IMPOSTO
+      FROM DBAMV.FINAN_RECEB_ITEM
+     WHERE CD_FINAN_RECEB = pCD_FINAN_RECEB;
+
+  rFinanRecebItem cFinanRecebItem%ROWTYPE;
+  nID    NUMBER;
+
+BEGIN
+  IF tFinanReceb.CD_FINAN_RECEB IS NULL THEN
+    IF F_EXISTE_RETORNO_LOTE_TISS(tDadosApuracao.ID_DLT) THEN
+       BEGIN
+        DELETE DBAMV.FINAN_RECEB_ITEM
+         WHERE CD_FINAN_RECEB IN (SELECT CD_FINAN_RECEB
+                                    FROM DBAMV.FINAN_RECEB
+                                   WHERE CD_ORIGEM = tDadosApuracao.ID_DLT
+                                     AND TP_ORIGEM = 'TISS_LOTE_APURACAO');
+
+        DELETE DBAMV.FINAN_RECEB
+         WHERE CD_ORIGEM = tDadosApuracao.ID_DLT
+           AND TP_ORIGEM = 'TISS_LOTE_APURACAO';
+        EXCEPTION
+          WHEN OTHERS THEN
+            Dbms_Output.Put_Line('Erro ao excluir FINAN_RECEB');
+      END;
+    END IF;
+
+    SELECT DBAMV.SEQ_FINAN_RECEB.NEXTVAL
+      INTO nID
+      FROM DUAL;
+
+    INSERT INTO DBAMV.FINAN_RECEB
+      (CD_FINAN_RECEB
+      ,CD_CONVENIO
+      ,CD_USUARIO_IMPO
+      ,CD_ORIGEM
+      ,DT_IMPORTACAO
+      ,TP_ORIGEM
+      ,CD_NOTA_FISCAL
+      ,CD_CON_REC
+      ,CD_ITCON_REC
+      ,CD_REMESSA
+      ,CD_REMESSA_GLOSA
+      ,NR_LOTE
+      ,CD_PROTOCOLO
+      ,VL_INFORMADO
+      ,VL_PROCESSADO
+      ,VL_LIBERADO
+	  ,CD_EMPRESA_LOGADA)
+    VALUES
+      (nID
+      ,tDadosApuracao.CD_CONVENIO
+      ,user
+      ,tDadosApuracao.ID_DLT
+      ,SYSDATE
+      ,'TISS_LOTE_APURACAO'
+      ,tDadosApuracao.CD_NOTA_FISCAL
+      ,tFinanReceb.CD_CON_REC
+      ,tFinanReceb.CD_ITCON_REC
+      ,tDadosApuracao.CD_REMESSA
+	    ,tDadosApuracao.CD_REMESSA_GLOSA
+      ,tDadosApuracao.NR_LOTE
+      ,tDadosApuracao.NR_PROTOCOLO
+      ,Nvl(tFinanReceb.VL_INFORMADO,0)
+      ,Nvl(tFinanReceb.VL_PROCESSADO,0)
+      ,Nvl(tFinanReceb.VL_LIBERADO,0)
+	    ,tDadosApuracao.CD_MULTI_EMPRESA);
+  ELSE
+
+    OPEN cFinanRecebItem(tFinanReceb.CD_FINAN_RECEB);
+      FETCH cFinanRecebItem INTO rFinanRecebItem;
+     CLOSE cFinanRecebItem;
+
+    tFinanReceb.VL_LIBERADO := rFinanRecebItem.VL_LIBERADO;
+    tFinanReceb.VL_GLOSADO  := rFinanRecebItem.VL_GLOSADO;
+    tFinanReceb.VL_ACRESCIMO:= rFinanRecebItem.VL_ACRESCIMO;
+
+    UPDATE DBAMV.FINAN_RECEB
+       SET VL_LIBERADO          = Nvl(tFinanReceb.VL_LIBERADO,0)
+         , VL_GLOSADO           = Nvl(tFinanReceb.VL_GLOSADO,0)
+         , VL_ACRESCIMO         = Nvl(tFinanReceb.VL_ACRESCIMO,0)
+         , VL_INVALIDO          = Nvl(tFinanReceb.VL_INVALIDO,0)
+     WHERE CD_FINAN_RECEB       = tFinanReceb.CD_FINAN_RECEB;
+
+      tDadosApuracao.CD_FINAN_RECEB := tFinanReceb.CD_FINAN_RECEB;
+      --
+      tDadosApuracao.VL_LIBERADO := tFinanReceb.VL_LIBERADO;
+      tDadosApuracao.VL_GLOSADO  := tFinanReceb.VL_GLOSADO;
+      tDadosApuracao.VL_ACRESCIMO:= tFinanReceb.VL_ACRESCIMO;
+
+
+  END IF;
+
+  RETURN Nvl(nID, tFinanReceb.CD_FINAN_RECEB);
+
+END F_DAC_DADOS_FINAN_RECEB;
+
+FUNCTION F_DEMONSTRATIVO_RETORNO_LOTE(P_ID IN NUMBER, P_VL_INFORMADO IN NUMBER, P_VL_LIBERADO IN NUMBER,P_VL_GLOSA IN NUMBER,P_VL_ACRESCIMO IN NUMBER,P_VL_INVALIDO IN NUMBER) RETURN NUMBER IS
+  nID    NUMBER;
+BEGIN
+  IF P_ID IS NULL THEN
+    IF F_EXISTE_DEM_RETORNO_LOTE(G_ID_LOTE) THEN
+      DELETE DBAMV.DEMONSTRATIVO_RETORNO_LOTE
+       WHERE CD_SEQ_LOTE_RETORNO = G_ID_LOTE
+         AND DS_ORIGEM_IMPORTACAO = 'TISS_APURACAO';
+    END IF;
+    SELECT DBAMV.SEQ_DEMONSTRATIVO_RETORNO_LOTE.NEXTVAL
+      INTO nID
+      FROM sys.DUAL;
+    INSERT INTO DBAMV.DEMONSTRATIVO_RETORNO_LOTE
+      (CD_DEMON_RET_LOTE
+      ,CD_CONVENIO
+      ,CD_SEQ_LOTE_RETORNO
+      ,DT_IMPORTACAO
+      ,DS_ORIGEM_IMPORTACAO
+      ,CD_NOTA_FISCAL
+      ,CD_REMESSA
+      ,CD_REMESSA_GLOSA
+      ,NR_LOTE
+      ,NR_PROTOCOLO
+      ,VL_INFORMADO)
+    VALUES
+      (nID
+      ,G_CD_CONVENIO
+      ,G_ID_LOTE
+      ,SYSDATE
+      ,'TISS_APURACAO'
+      ,G_CD_NOTA_FISCAL
+      ,G_CD_REMESSA_LOTE
+	    ,G_CD_REMESSA_GLOSA_LOTE
+      ,G_NR_LOTE
+      ,G_NR_PROTOCOLO
+      ,NULL);
+  ELSE
+    UPDATE DBAMV.DEMONSTRATIVO_RETORNO_LOTE
+       SET VL_PAGO              = P_VL_LIBERADO
+         , VL_ACRES             = P_VL_ACRESCIMO
+         , VL_GLOSA             = P_VL_GLOSA
+         , VL_INVALIDO_APURACAO = P_VL_INVALIDO
+     WHERE CD_DEMON_RET_LOTE = P_ID;
+  END IF;
+  RETURN Nvl(nID,P_ID);
+END F_DEMONSTRATIVO_RETORNO_LOTE;
+
+FUNCTION F_DEMONSTRATIVO_RETORNO_ITEM(P_ID IN NUMBER,P_ID_PAI IN NUMBER, P_SEQ_ITEM IN NUMBER, P_CD_ITFAT_NF IN NUMBER,P_VL_INFORMADO IN NUMBER, P_VL_PAGO IN NUMBER, P_VL_ACRES IN NUMBER, P_TOT_GLOSA IN NUMBER) RETURN NUMBER IS
+  nID NUMBER;
+  nCD_MOT_GLOSA1 NUMBER;
+  nCD_MOT_GLOSA2 NUMBER;
+  nCD_MOT_GLOSA3 NUMBER;
+  nVALOR_GLOSA1  NUMBER;
+  nVALOR_GLOSA2  NUMBER;
+  nVALOR_GLOSA3  NUMBER;
+BEGIN
+  IF P_ID IS NULL THEN
+    SELECT DBAMV.SEQ_DEMONSTRATIVO_RETORNO_ITEM.NEXTVAL
+      INTO nID
+      FROM sys.DUAL;
+
+    nCD_MOT_GLOSA1:= TO_NUMBER(F_DADO_GLOSA(P_SEQ_ITEM,1,'CODIGO_MV'));
+    nVALOR_GLOSA1 := TO_NUMBER(F_DADO_GLOSA(P_SEQ_ITEM,1,'VALOR'),'999999999.99');
+    nCD_MOT_GLOSA2:= TO_NUMBER(F_DADO_GLOSA(P_SEQ_ITEM,2,'CODIGO_MV'));
+    nVALOR_GLOSA2 := TO_NUMBER(F_DADO_GLOSA(P_SEQ_ITEM,2,'VALOR'),'999999999.99');
+    nCD_MOT_GLOSA3:= TO_NUMBER(F_DADO_GLOSA(P_SEQ_ITEM,3,'CODIGO_MV'));
+    nVALOR_GLOSA3 := TO_NUMBER(F_DADO_GLOSA(P_SEQ_ITEM,3,'VALOR'),'999999999.99');
+
+    INSERT INTO DBAMV.DEMONSTRATIVO_RETORNO_ITEM
+      (CD_DEMON_RET_ITEM
+      ,CD_DEMON_RET_LOTE
+      ,CD_SEQ_ITEM_RETORNO
+      ,CD_ITFAT_NF
+      ,VL_INFORMADO
+      ,VL_PAGO
+      ,CD_ACRES
+      ,VL_ACRES
+      ,CD_DESC
+      ,VL_DESC
+      ,CD_MOTIVO_GLOSA1
+      ,VL_GLOSA1
+      ,CD_MOTIVO_GLOSA2
+      ,VL_GLOSA2
+      ,CD_MOTIVO_GLOSA3
+      ,VL_GLOSA3
+      ,DS_OBS_GLOSA)
+    VALUES
+      (nID
+      ,P_ID_PAI
+      ,P_SEQ_ITEM
+      ,P_CD_ITFAT_NF
+      ,P_VL_INFORMADO
+      ,P_VL_PAGO
+      ,NULL
+      ,P_VL_ACRES
+      ,NULL
+      ,NULL
+      ,nCD_MOT_GLOSA1
+      ,Nvl(nVALOR_GLOSA1,P_TOT_GLOSA)
+      ,nCD_MOT_GLOSA2
+      ,nVALOR_GLOSA2
+      ,nCD_MOT_GLOSA3
+      ,nVALOR_GLOSA3
+      ,NULL);
+  END IF;
+
+  RETURN Nvl(nID,P_ID);
+
+END F_DEMONSTRATIVO_RETORNO_ITEM;
+
+PROCEDURE P_APURA_CONCILIADO(P_CD_REMESSA IN NUMBER,
+                             P_NR_LOTE IN VARCHAR2,
+                             P_CD_CONVENIO IN VARCHAR2,
+                             P_VL_LIBERADO OUT NUMBER ,
+                             P_VL_GLOSA OUT NUMBER,
+                             P_VL_ACRESCIMO OUT NUMBER,
+                             P_VL_INVALIDO OUT NUMBER,
+                             P_MSG_ERRO OUT VARCHAR2) IS
+  nVL_ACRESCIMO     NUMBER;
+  nSeqDRL           NUMBER;
+  nSeqIDRL          NUMBER;
+
+  --Oswaldo Inicio
+  P_VL_INFORMADO    NUMBER;
+  P_VL_PROCESSADO   NUMBER;
+
+  vFinanReceb       tpFinanReceb;
+  vFinanRecebItem   tpFinanRecebItem;
+  --Oswaldo Fim
+
+BEGIN
+
+  --Oswaldo Inicio
+  P_VL_INFORMADO    := 0;
+  P_VL_PROCESSADO   := 0;
+  P_VL_GLOSA        := 0;
+  P_VL_ACRESCIMO    := 0;
+  P_VL_LIBERADO     := 0;
+  P_VL_INVALIDO     := 0;
+  --Oswaldo Fim
+
+  OPEN C_LOTE_RETORNO(P_CD_CONVENIO, P_NR_LOTE,NULL,P_CD_REMESSA);
+  FETCH C_LOTE_RETORNO INTO R_LOTE_RETORNO;
+  CLOSE C_LOTE_RETORNO;
+
+  OPEN C_LOTE_ENVIO(R_LOTE_RETORNO.ID_MENSAGEM_ENVIO);
+  FETCH C_LOTE_ENVIO INTO R_LOTE_ENVIO;
+  CLOSE C_LOTE_ENVIO;
+
+  --Oswaldo Inicio
+  OPEN C_CON_REC(G_CD_NOTA_FISCAL);
+  FETCH C_CON_REC INTO R_CON_REC;
+  CLOSE C_CON_REC;
+
+  --nSeqDRL:= F_DEMONSTRATIVO_RETORNO_LOTE(NULL,R_LOTE_RETORNO.VL_INFORMADO_PROTOCOLO,NULL,NULL,NULL,NULL);
+  vFinanReceb.cd_con_rec := R_CON_REC.CD_CON_REC;
+  vFinanReceb.cd_itcon_rec := R_CON_REC.CD_ITCON_REC;
+  vFinanReceb.cd_finan_receb := NULL;
+  nSeqDRL := F_CABECALHO_RETORNO_LOTE_TISS(vFinanReceb);
+  --Oswaldo Fim
+
+	FOR rCONCILIADO IN cCONCILIADO(R_LOTE_ENVIO.CD_REMESSA,R_LOTE_ENVIO.CD_REMESSA_GLOSA,R_LOTE_RETORNO.ID_TLD,R_LOTE_RETORNO.NR_LOTE) LOOP
+		IF rCONCILIADO.ID_IT_ENVIO IS NOT NULL OR rCONCILIADO.TIPO = 'CONSULTAS'  THEN
+      --
+      P_VL_LIBERADO	  :=	NVL(P_VL_LIBERADO,0) + Nvl(rCONCILIADO.VL_LIBERADO_CONC,0);
+      --
+	  	P_VL_GLOSA	    :=	NVL(P_VL_GLOSA,0) +	Nvl(rCONCILIADO.VL_GLOSADO_CONC,0);
+      --
+      nVL_ACRESCIMO:= 0;
+      IF (NVL(rCONCILIADO.VL_LIBERADO_CONC,0)+ NVL(rCONCILIADO.VL_GLOSADO_CONC,0)) > NVL(rCONCILIADO.VL_ITFAT_NF,0) THEN
+		    nVL_ACRESCIMO :=	((Nvl(rCONCILIADO.VL_LIBERADO_CONC,0) + NVL(rCONCILIADO.VL_GLOSADO_CONC,0)) - NVL(rCONCILIADO.VL_ITFAT_NF,0));
+		  END IF;
+      --
+      P_VL_ACRESCIMO  :=  Nvl(P_VL_ACRESCIMO,0) +  Nvl(nVL_ACRESCIMO,0);
+      --
+
+		ELSE
+      --
+			P_VL_INVALIDO   := NVL(P_VL_INVALIDO,0) + Nvl(NVL(rCONCILIADO.VL_INFORMADO,rCONCILIADO.VL_PROCESSADO_CONC),0);
+
+      --
+		END IF;
+
+    --Oswaldo Inicio
+    /*nSeqIDRL:= F_DEMONSTRATIVO_RETORNO_ITEM(NULL,nSeqDRL,rCONCILIADO.ID_RETORNO_PROC,rCONCILIADO.CD_ITFAT_NF,rCONCILIADO.VL_INFORMADO,Nvl(rCONCILIADO.VL_LIBERADO_CONC,0),nVL_ACRESCIMO,NVL(rCONCILIADO.VL_GLOSADO_CONC,0));*/
+
+	  vFinanRecebItem.CD_FINAN_RECEB_ITEM := NULL;
+    vFinanRecebItem.CD_FINAN_RECEB := nSeqDRL;
+    vFinanRecebItem.CD_ORIGEM_ITEM := rCONCILIADO.ID_RETORNO_PROC;
+    vFinanRecebItem.CD_ORIGEM := rCONCILIADO.ID_RETORNO_GUIA;
+    vFinanRecebItem.CD_ITFAT_NF := rCONCILIADO.CD_ITFAT_NF;
+    vFinanRecebItem.CD_REMESSA := rCONCILIADO.CD_REMESSA;
+    vFinanRecebItem.CD_PROCEDIMENTO := rCONCILIADO.CD_PRO_FAT;
+    vFinanRecebItem.CD_MOTIVO_1 := TO_NUMBER(F_DADO_GLOSA(rCONCILIADO.ID_RETORNO_PROC, 1, 'CODIGO_MV'));
+    vFinanRecebItem.CD_MOTIVO_2 := TO_NUMBER(F_DADO_GLOSA(rCONCILIADO.ID_RETORNO_PROC, 2, 'CODIGO_MV'));
+    vFinanRecebItem.CD_MOTIVO_3 := TO_NUMBER(F_DADO_GLOSA(rCONCILIADO.ID_RETORNO_PROC, 3, 'CODIGO_MV'));
+    vFinanRecebItem.VL_INFORMADO := Nvl(rCONCILIADO.VL_INFORMADO,0);
+    vFinanRecebItem.VL_PROCESSADO := Nvl(rCONCILIADO.VL_PROCESSADO_PROC,0);
+    vFinanRecebItem.VL_LIBERADO := Nvl(rCONCILIADO.VL_LIBERADO_PROC,0);
+    vFinanRecebItem.VL_GLOSA := Nvl(rCONCILIADO.VL_GLOSADO_PROC,0);
+    vFinanRecebItem.VL_ACRESCIMO := Nvl(nVL_ACRESCIMO,0);
+    vFinanRecebItem.VL_IMPOSTO := NULL;
+    vFinanRecebItem.VL_DESCONTO := NULL;
+    vFinanRecebItem.VL_INVALIDO := Nvl(P_VL_INVALIDO,0);
+	vFinanRecebItem.DS_FALHA := rCONCILIADO.DS_OBSERVACAO_IMPORTACAO;
+    --
+    nSeqIDRL := F_ITENS_RETORNO_LOTE_TISS(vFinanRecebItem);
+	  --Oswaldo Fim
+
+	END LOOP;
+
+  --Oswaldo Inicio
+  P_VL_INVALIDO:= NVL(P_VL_INVALIDO,0);
+  /*nSeqDRL:= F_DEMONSTRATIVO_RETORNO_LOTE(nSeqDRL,NULL,P_VL_LIBERADO,P_VL_GLOSA,nVL_ACRESCIMO,P_VL_INVALIDO);*/
+
+  vFinanReceb.cd_finan_receb := nSeqDRL;
+  vFinanReceb.VL_INFORMADO := P_VL_INFORMADO;
+  vFinanReceb.VL_PROCESSADO := P_VL_PROCESSADO;
+  vFinanReceb.VL_LIBERADO := P_VL_LIBERADO;
+  vFinanReceb.VL_GLOSADO := P_VL_GLOSA;
+  vFinanReceb.VL_ACRESCIMO := P_VL_ACRESCIMO;
+  vFinanReceb.VL_IMPOSTO := NULL;
+  vFinanReceb.VL_DESCONTO := NULL;
+  vFinanReceb.VL_INVALIDO := P_VL_INVALIDO;
+  --
+  nSeqDRL := F_CABECALHO_RETORNO_LOTE_TISS(vFinanReceb);
+  --Oswaldo Fim
+
+EXCEPTION
+  WHEN OTHERS THEN
+    P_MSG_ERRO:= 'P_APURA_CONCILIADO | '||nSeqDRL||' | '||SQLERRM;
+END P_APURA_CONCILIADO;
+
+
+FUNCTION F_ITENS_RETORNO_LOTE_TISS(pFinanRecebItem tpFinanRecebItem) RETURN number
+IS
+  nID NUMBER;
+  nCD_MOT_GLOSA1 NUMBER;
+  nCD_MOT_GLOSA2 NUMBER;
+  nCD_MOT_GLOSA3 NUMBER;
+  nVALOR_GLOSA1  NUMBER;
+  nVALOR_GLOSA2  NUMBER;
+  nVALOR_GLOSA3  NUMBER;
+BEGIN
+  IF pFinanRecebItem.cd_finan_receb IS NOT NULL THEN
+    --
+    SELECT DBAMV.SEQ_FINAN_RECEB_ITEM.NEXTVAL
+      INTO nID
+      FROM dual;
+    --
+
+Dbms_Output.Put_Line('<------------------------------------NO INSERT-------------------------------------------->');
+    INSERT INTO DBAMV.FINAN_RECEB_ITEM
+      (
+       cd_finan_receb_item,
+       cd_finan_receb,
+       cd_itfat_nf,
+       vl_informado,
+       vl_processado,
+       vl_glosado,
+       vl_desconto,
+       vl_acrescimo,
+       vl_imposto,
+       vl_liberado,
+       cd_motivo_1,
+       cd_motivo_2,
+       cd_motivo_3,
+       cd_origem,
+       cd_origem_item,
+       cd_remessa,
+       cd_procedimento,
+	     ds_falha,
+       cd_reg_fat,
+       cd_lancamento_fat,
+       cd_reg_amb,
+       cd_lancamento_amb
+      )
+    VALUES
+      (nID
+      ,pFinanRecebItem.cd_finan_receb
+      ,pFinanRecebItem.cd_itfat_nf
+      ,Nvl(pFinanRecebItem.vl_informado,0)
+      ,Nvl(pFinanRecebItem.vl_processado,0)
+      ,Nvl(pFinanRecebItem.vl_glosa,0)
+      ,pFinanRecebItem.vl_desconto
+      ,Nvl(pFinanRecebItem.vl_acrescimo,0)
+      ,pFinanRecebItem.vl_imposto
+      ,pFinanRecebItem.vl_liberado
+      ,pFinanRecebItem.cd_motivo_1
+      ,pFinanRecebItem.cd_motivo_2
+      ,pFinanRecebItem.cd_motivo_3
+      ,pFinanRecebItem.cd_origem
+      ,pFinanRecebItem.cd_origem_item
+      ,pFinanRecebItem.cd_remessa
+      ,pFinanRecebItem.cd_procedimento
+	    ,pFinanRecebItem.ds_falha
+      ,pFinanRecebItem.cd_reg_fat
+      ,pFinanRecebItem.cd_lancamento_fat
+      ,pFinanRecebItem.cd_reg_amb
+      ,pFinanRecebItem.cd_lancamento_amb
+      );
+
+  END IF;
+
+  RETURN Nvl(nID, pFinanRecebItem.cd_finan_receb_item);
+
+END F_ITENS_RETORNO_LOTE_TISS;
+
+PROCEDURE P_APURA_CONCILIADO_v304(P_NR_DOCUMENTO IN NUMBER,
+                                  P_NR_LOTE IN VARCHAR2,
+                                  P_CD_CONVENIO IN VARCHAR2,
+                                  --Oswaldo Inicio
+                                  P_VL_LIBERADO OUT NUMBER ,
+                                  P_VL_GLOSA OUT NUMBER,
+                                  P_VL_ACRESCIMO OUT NUMBER,
+                                  P_VL_INVALIDO OUT NUMBER,
+                                  --Oswaldo Fim
+                                  P_MSG_ERRO OUT VARCHAR2)
+IS
+
+  CURSOR C_ITENS_CONCILIADOS(P_NR_REGISTRO_ANS NUMBER, PP_NR_LOTE VARCHAR2, P_NR_PROTOCOLO NUMBER) IS
+  SELECT
+          CLOTE.ID ID_TLD
+        , CPROC.ID ID_RETORNO_PROC
+				, CGUIA.ID ID_RETORNO_GUIA
+        , CPROC.CD_PROCEDIMENTO
+			  , TO_NUMBER(NVL(CPROC.VL_INFORMADO,  '0'),'99999999999999.99') VL_INFORMADO
+			  , TO_NUMBER(NVL(CPROC.VL_PROCESSADO, '0'),'99999999999999.99') VL_PROCESSADO
+			  , TO_NUMBER(NVL(CPROC.VL_LIBERADO,   '0'),'99999999999999.99') VL_LIBERADO
+        , TO_NUMBER(NVL(CPROC.VL_INFORMADO,  '0'),'99999999999999.99') - TO_NUMBER(NVL(CPROC.VL_LIBERADO,'0')) VL_GLOSADO
+        , CASE WHEN ITFAT.CD_ITFAT_NF IS NULL
+               THEN TO_NUMBER(NVL(CPROC.VL_INFORMADO, Nvl(CPROC.VL_PROCESSADO, '0')),'99999999999999.99')
+               ELSE 0
+               END VL_INVALIDO
+			  , ITFAT.ID_IT_ENVIO
+        , CPROC.CD_PRO_FAT
+        , CPROC.QT_EXECUTADA
+        , CPROC.SQ_ITEM
+        , ITFAT.CD_ITFAT_NF
+        , ITFAT.VL_ITFAT_NF
+        , Decode(ITFAT.CD_ITFAT_NF,NULL,'Item no localizado') DS_FALHA
+        , TO_NUMBER(TMR.NR_DOCUMENTO) CD_REMESSA
+	  FROM  DBAMV.TISS_MENSAGEM                   TMR
+        , DBAMV.TISS_RETORNO_DEMON_CONTA        CTA
+        , DBAMV.TISS_MENSAGEM                   TME
+			  , DBAMV.TISS_RETORNO_DEMON_CONTA_LOTE 	CLOTE
+			  , DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA 	CGUIA
+			  , DBAMV.TISS_RETORNO_DEMON_CONTA_PROC 	CPROC
+        , DBAMV.ITFAT_NOTA_FISCAL               ITFAT
+	  WHERE TME.NR_REGISTRO_ANS_DESTINO = P_NR_REGISTRO_ANS
+      AND TME.NR_LOTE = PP_NR_LOTE
+      AND TME.NR_PROTOCOLO_RETORNO = P_NR_PROTOCOLO
+      AND TME.ID = tmr.ID_MENSAGEM_ENVIO
+      AND TMR.ID = CTA.ID_PAI
+      AND CTA.ID = CLOTE.ID_PAI
+      AND CLOTE.ID = CGUIA.ID_PAI
+      AND CGUIA.ID = CPROC.ID_PAI
+		  AND ITFAT.ID_IT_ENVIO(+)= CPROC.ID_IT_ENVIO
+		  AND ( CGUIA.CD_STATUS_GUIA in ('6','4') OR (CGUIA.CD_STATUS_GUIA = '3' AND CGUIA.VL_GLOSA_GUIA = CGUIA.VL_INFORMADO_GUIA))
+		  AND NOT EXISTS (SELECT 'X'
+			                  FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PROC DP1,
+                             DBAMV.ITFAT_NOTA_FISCAL ITF2,
+                             DBAMV.IT_RECEBIMENTO IR
+			                 WHERE DP1.ID_PAI       = CGUIA.ID
+			                   AND ITF2.CD_REMESSA  = TO_NUMBER(TMR.NR_DOCUMENTO)
+			                   AND ITF2.ID_IT_ENVIO = DP1.ID_IT_ENVIO
+			                   AND IR.CD_ITFAT_NF   = ITF2.CD_ITFAT_NF);
+
+  nVL_ACRESCIMO     NUMBER;
+
+  nSeqDRL           NUMBER;
+  nSeqIDRL          NUMBER;
+
+  --Oswaldo Inicio
+  P_VL_INFORMADO    NUMBER;
+  P_VL_PROCESSADO   NUMBER;
+  --Oswaldo Fim
+
+  vFinanReceb       tpFinanReceb;
+  vFinanRecebItem   tpFinanRecebItem;
+
+BEGIN
+  --
+  --Oswaldo Inicio
+  P_VL_INFORMADO    := 0;
+  P_VL_PROCESSADO   := 0;
+  P_VL_GLOSA        := 0;
+  P_VL_ACRESCIMO    := 0;
+  P_VL_LIBERADO     := 0;
+  P_VL_INVALIDO     := 0;
+  --
+
+  OPEN C_LOTE_RETORNO(P_CD_CONVENIO, P_NR_LOTE,NULL,P_NR_DOCUMENTO);
+  FETCH C_LOTE_RETORNO INTO R_LOTE_RETORNO;
+  CLOSE C_LOTE_RETORNO;
+
+  OPEN C_LOTE_ENVIO(R_LOTE_RETORNO.ID_MENSAGEM_ENVIO);
+  FETCH C_LOTE_ENVIO INTO R_LOTE_ENVIO;
+  CLOSE C_LOTE_ENVIO;
+
+  OPEN C_CON_REC(G_CD_NOTA_FISCAL);
+  FETCH C_CON_REC INTO R_CON_REC;
+  CLOSE C_CON_REC;
+
+  vFinanReceb.cd_con_rec := R_CON_REC.CD_CON_REC;
+  vFinanReceb.cd_itcon_rec := R_CON_REC.CD_ITCON_REC;
+  --Oswaldo Fim
+
+  vFinanReceb.cd_finan_receb := NULL;
+  nSeqDRL := F_CABECALHO_RETORNO_LOTE_TISS(vFinanReceb);
+
+  -- Loop de itens conciliados.                  --Oswaldo Inicio                                                                --Oswaldo Fim
+	FOR r_ITENS_CONCILIADOS IN C_ITENS_CONCILIADOS(R_LOTE_ENVIO.NR_REGISTRO_ANS_DESTINO, R_LOTE_ENVIO.NR_LOTE, R_LOTE_ENVIO.nr_protocolo_retorno) LOOP
+    --
+		IF r_ITENS_CONCILIADOS.ID_IT_ENVIO IS NOT NULL THEN
+      --
+      P_VL_LIBERADO	  :=	NVL(P_VL_LIBERADO,0) + Nvl(r_ITENS_CONCILIADOS.VL_LIBERADO,0);
+      --
+	  	P_VL_GLOSA	    :=	NVL(P_VL_GLOSA,0) +	Nvl(r_ITENS_CONCILIADOS.VL_GLOSADO,0);
+      --
+      nVL_ACRESCIMO := 0;
+      IF (NVL(r_ITENS_CONCILIADOS.VL_LIBERADO,0) + NVL(r_ITENS_CONCILIADOS.VL_GLOSADO,0)) > NVL(r_ITENS_CONCILIADOS.VL_ITFAT_NF,0) THEN
+		    nVL_ACRESCIMO := ((Nvl(r_ITENS_CONCILIADOS.VL_LIBERADO,0) + NVL(r_ITENS_CONCILIADOS.VL_GLOSADO,0)) - NVL(r_ITENS_CONCILIADOS.VL_ITFAT_NF,0));
+		  END IF;
+      --
+      P_VL_ACRESCIMO  := Nvl(P_VL_ACRESCIMO,0) + Nvl(nVL_ACRESCIMO,0);
+      --
+		ELSE
+      --
+			P_VL_INVALIDO   := NVL(P_VL_INVALIDO,0) + Nvl(r_ITENS_CONCILIADOS.VL_INVALIDO,0); --Nvl(NVL(r_ITENS_CONCILIADOS.VL_INFORMADO, r_ITENS_CONCILIADOS.VL_PROCESSADO),0);
+      --
+		END IF;
+    --
+    vFinanRecebItem.CD_FINAN_RECEB_ITEM := NULL;
+    vFinanRecebItem.CD_FINAN_RECEB := nSeqDRL;
+    vFinanRecebItem.CD_ORIGEM_ITEM := r_ITENS_CONCILIADOS.ID_RETORNO_PROC;
+    vFinanRecebItem.CD_ORIGEM := r_ITENS_CONCILIADOS.ID_RETORNO_GUIA;
+    vFinanRecebItem.CD_ITFAT_NF := r_ITENS_CONCILIADOS.CD_ITFAT_NF;
+    vFinanRecebItem.CD_REMESSA := r_ITENS_CONCILIADOS.CD_REMESSA;
+    vFinanRecebItem.CD_PROCEDIMENTO := r_ITENS_CONCILIADOS.CD_PROCEDIMENTO;
+    vFinanRecebItem.CD_MOTIVO_1 := TO_NUMBER(F_DADO_GLOSA(r_ITENS_CONCILIADOS.ID_RETORNO_PROC, 1, 'CODIGO_MV'));
+    vFinanRecebItem.CD_MOTIVO_2 := TO_NUMBER(F_DADO_GLOSA(r_ITENS_CONCILIADOS.ID_RETORNO_PROC, 2, 'CODIGO_MV'));
+    vFinanRecebItem.CD_MOTIVO_3 := TO_NUMBER(F_DADO_GLOSA(r_ITENS_CONCILIADOS.ID_RETORNO_PROC, 3, 'CODIGO_MV'));
+    vFinanRecebItem.VL_INFORMADO := Nvl(r_ITENS_CONCILIADOS.VL_INFORMADO,0);
+    vFinanRecebItem.VL_PROCESSADO := Nvl(r_ITENS_CONCILIADOS.VL_PROCESSADO,0);
+    vFinanRecebItem.VL_LIBERADO := Nvl(r_ITENS_CONCILIADOS.VL_LIBERADO,0);
+    vFinanRecebItem.VL_GLOSA := Nvl(r_ITENS_CONCILIADOS.VL_GLOSADO,0);
+    vFinanRecebItem.VL_ACRESCIMO := Nvl(nVL_ACRESCIMO,0);
+    vFinanRecebItem.VL_IMPOSTO := NULL;
+    vFinanRecebItem.VL_DESCONTO := NULL;
+    vFinanRecebItem.VL_INVALIDO := Nvl(r_ITENS_CONCILIADOS.VL_INVALIDO,0);
+    --
+    nSeqIDRL := F_ITENS_RETORNO_LOTE_TISS(vFinanRecebItem);
+    --
+	END LOOP;
+
+  P_VL_INVALIDO := NVL(P_VL_INVALIDO, 0);
+
+  vFinanReceb.cd_finan_receb := nSeqDRL;
+  vFinanReceb.VL_INFORMADO := P_VL_INFORMADO;
+  vFinanReceb.VL_PROCESSADO := P_VL_PROCESSADO;
+  vFinanReceb.VL_LIBERADO := P_VL_LIBERADO;
+  vFinanReceb.VL_GLOSADO := P_VL_GLOSA;
+  vFinanReceb.VL_ACRESCIMO := P_VL_ACRESCIMO;
+  vFinanReceb.VL_IMPOSTO := NULL;
+  vFinanReceb.VL_DESCONTO := NULL;
+  vFinanReceb.VL_INVALIDO := P_VL_INVALIDO;
+  --
+  nSeqDRL := F_CABECALHO_RETORNO_LOTE_TISS(vFinanReceb);
+  --
+EXCEPTION
+  WHEN OTHERS THEN
+    P_MSG_ERRO := 'P_APURA_CONCILIADO_v304 | '||nSeqDRL||' | '||SQLERRM;
+END P_APURA_CONCILIADO_v304;
+
+
+PROCEDURE P_LIMPA_ANALISE_CONTA(P_ID_MSG IN NUMBER, P_NR_DOCUMENTO VARCHAR2, P_NR_LOTE VARCHAR2, P_MSG_ERRO OUT VARCHAR2) IS
+
+  eSAIDA    EXCEPTION;
+  vMSG_ERRO VARCHAR2(2000);
+  nACHOU    NUMBER;
+BEGIN
+
+  SELECT Count(*)
+    INTO nACHOU
+    FROM DBAMV.FINAN_RECEB
+   WHERE TP_ORIGEM = 'TISS_LOTE_APURACAO'
+     AND DT_RECEBIMENTO IS NOT NULL
+     AND CD_ORIGEM = P_ID_MSG;
+
+  -- Esta validação tem que existir -- SR/OSW 28/12/2021
+  IF nACHOU > 0 THEN
+    vMSG_ERRO:= 'ATENÇÃO: Existe movimentação financeiro de baixa. Não é possível serguir com o processamento.';
+    Dbms_Output.Put_Line(vMSG_ERRO);
+    RAISE eSAIDA;
+  END IF;
+
+	DELETE DBAMV.FINAN_RECEB_ITEM
+	 WHERE CD_FINAN_RECEB IN (SELECT CD_FINAN_RECEB
+                              FROM DBAMV.FINAN_RECEB
+                             WHERE TP_ORIGEM = 'TISS_LOTE_APURACAO'
+                               AND CD_ORIGEM = P_ID_MSG);
+
+	DELETE DBAMV.FINAN_RECEB
+	 WHERE TP_ORIGEM = 'TISS_LOTE_APURACAO'
+     AND CD_ORIGEM = P_ID_MSG;
+
+  -- Limpa OUTROS registros obsoletos
+  FOR rBaixa IN (SELECT CD_FINAN_RECEB
+                   FROM DBAMV.FINAN_RECEB
+                  WHERE TP_ORIGEM = 'TISS_LOTE_APURACAO'
+                    --AND TP_STATUS <> 'PR'
+                    AND CD_REMESSA = P_NR_DOCUMENTO
+                    AND NR_LOTE = P_NR_LOTE) LOOP
+
+	  DELETE DBAMV.FINAN_RECEB_ITEM
+	   WHERE CD_FINAN_RECEB = rBAIXA.CD_FINAN_RECEB;
+
+    DELETE DBAMV.FINAN_RECEB
+	   WHERE CD_FINAN_RECEB = rBAIXA.CD_FINAN_RECEB;
+
+  END LOOP;
+    --
+    DELETE FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PRC_G
+        WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PROC
+                            WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA
+                                                WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_RETORNO_DEMON_CONTA_LOTE
+                                                                    WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_RETORNO_DEMON_CONTA
+                                                                                        WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_MENSAGEM WHERE ID = P_ID_MSG)))));
+    --
+    DELETE FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PROC
+        WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA
+                            WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_RETORNO_DEMON_CONTA_LOTE
+                                                WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_RETORNO_DEMON_CONTA
+                                                                   WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_MENSAGEM WHERE ID = P_ID_MSG))));
+    --
+    DELETE FROM DBAMV.TISS_RETORNO_DEMON_CTA_GLOSA_G
+        WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA
+                            WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_RETORNO_DEMON_CONTA_LOTE
+                                                WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_RETORNO_DEMON_CONTA
+                                                                   WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_MENSAGEM WHERE ID = P_ID_MSG))));
+    --
+    DELETE FROM DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA
+       WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_RETORNO_DEMON_CONTA_LOTE
+                            WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_RETORNO_DEMON_CONTA
+                                                WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_MENSAGEM WHERE ID = P_ID_MSG)));
+    --
+    DELETE FROM DBAMV.TISS_RETORNO_DEMON_CTA_LOTE_G
+       WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_RETORNO_DEMON_CONTA_LOTE
+                            WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_RETORNO_DEMON_CONTA
+                                                WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_MENSAGEM WHERE ID = P_ID_MSG)));
+    --
+    DELETE FROM DBAMV.TISS_RETORNO_DEMON_CONTA_LOTE
+        WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_RETORNO_DEMON_CONTA
+                            WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_MENSAGEM WHERE ID = P_ID_MSG));
+    --
+    DELETE FROM DBAMV.TISS_RETORNO_DEMON_CONTA
+        WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_MENSAGEM WHERE ID = P_ID_MSG);
+    --
+    DELETE FROM DBAMV.TISS_LOG
+        WHERE ID_MENSAGEM = P_ID_MSG;
+    --
+    DELETE FROM DBAMV.TISS_MENSAGEM
+        WHERE ID = P_ID_MSG;
+    --
+
+EXCEPTION
+  WHEN eSAIDA THEN
+    P_MSG_ERRO:= vMSG_ERRO;
+
+  WHEN OTHERS THEN
+    P_MSG_ERRO:= 'Problema ao apagar importação de XML anterior.'||Chr(10)||SQLERRM;
+
+END P_LIMPA_ANALISE_CONTA;
+
+PROCEDURE PRC_DAC_APURA_LOTE(pIdMsgLoteEnvio NUMBER, pDetalhe OUT VARCHAR2, pMSG_ERRO OUT VARCHAR2) IS
+
+  CURSOR cITDAC(pID_DAC NUMBER) IS
+    SELECT ITEM.ID
+         , ITEM.DS_OBSERVACAO_IMPORTACAO
+         , ITEM.CD_PROCEDIMENTO
+      FROM DBAMV.TISS_RETORNO_DEMON_CONTA DAC
+         , DBAMV.TISS_RETORNO_DEMON_CONTA_LOTE LOTE
+         , DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA GUIA
+         , DBAMV.TISS_RETORNO_DEMON_CONTA_PROC ITEM
+     WHERE DAC.ID = pID_DAC
+       AND DAC.ID = LOTE.ID_PAI
+       AND LOTE.ID = GUIA.ID_PAI
+       AND GUIA.ID = ITEM.ID_PAI
+       AND ITEM.DS_OBSERVACAO_IMPORTACAO IS NOT NULL;
+
+  vMSG_ERRO      VARCHAR2(2000);
+  tDadosApuracao recDadosApuracao;
+  vDETALHE       VARCHAR2(32000);
+  apresERRO      BOOLEAN:= FALSE;
+  nAPURADOMV     NUMBER;
+  nDECLARADO     NUMBER;
+  nErro          NUMBER:=0;
+  eERRO          EXCEPTION;
+
+BEGIN
+
+
+  IF NOT(FNC_DAC_APURA_LOTE(pIdMsgLoteEnvio,tDadosApuracao)) THEN
+    apresERRO:= TRUE;
+  END IF;
+
+  nAPURADOMV:= tDadosApuracao.VL_LIBERADO + tDadosApuracao.VL_GLOSADO + tDadosApuracao.VL_INVALIDO;
+  nDECLARADO:= To_Number(tDadosApuracao.VL_DEC_LIBERADO) + To_Number(tDadosApuracao.VL_DEC_GLOSA,'9999999999.99');
+
+  Dbms_Output.Put_Line(null);
+
+  vDetalhe:= 'Empresa: '||tDadosApuracao.CD_MULTI_EMPRESA||', Remessa: '||tDadosApuracao.CD_REMESSA||', Lote: '||tDadosApuracao.NR_LOTE||' | Apurado/Declarado: '||nAPURADOMV||'/'||nDECLARADO;
+
+  IF nAPURADOMV = 0 THEN
+    vDetalhe:= vDetalhe||Chr(10)||'('||tDadosApuracao.CD_FINAN_RECEB||') DIAGNÓSTICO: Nada foi apurado!';
+    apresERRO:= TRUE;
+  ELSIF nAPURADOMV - nDECLARADO = 0 THEN
+    vDetalhe:= vDetalhe||Chr(10)||'('||tDadosApuracao.CD_FINAN_RECEB||') DIAGNÓSTICO: Cálculo de apuração CORRETO!';
+  ELSIF nAPURADOMV - nDECLARADO > 0 THEN
+    vDetalhe:= vDetalhe||Chr(10)||'('||tDadosApuracao.CD_FINAN_RECEB||') DIAGNÓSTICO: Apuração MV maior que o declarado.';
+    apresERRO:= TRUE;
+  ELSE
+    vDetalhe:= vDetalhe||Chr(10)||'('||tDadosApuracao.CD_FINAN_RECEB||') DIAGNÓSTICO: Apuração MV menor que o declarado.';
+    apresERRO:= TRUE;
+  END IF;
+
+  vDetalhe:= vDetalhe||Chr(10)||'DECLARADO Informado: '||tDadosApuracao.VL_DECLARADO||', Liberado: '||tDadosApuracao.VL_DEC_LIBERADO||', Glosa: '||tDadosApuracao.VL_DEC_GLOSA;
+  vDetalhe:= vDetalhe||Chr(10)||Nvl(tDadosApuracao.MSG_ERRO,'Apurado sem erros...');
+  vDetalhe:= vDetalhe||Chr(10)||'VL Liberado..: '||tDadosApuracao.VL_LIBERADO;
+  vDetalhe:= vDetalhe||Chr(10)||'VL Glosa.....: '||tDadosApuracao.VL_GLOSADO;
+  vDetalhe:= vDetalhe||Chr(10)||'VL Acréscimo.: '||tDadosApuracao.VL_ACRESCIMO;
+  vDetalhe:= vDetalhe||Chr(10)||'VL Inválido..: '||tDadosApuracao.VL_INVALIDO;
+  vDetalhe:= vDetalhe||Chr(10);
+
+  vDetalhe:= vDetalhe||Chr(10);
+
+  IF apresERRO THEN
+    begin
+	    vDetalhe:= vDetalhe||Chr(10)||'Apresentação de Ocorrências (DPR):';
+		FOR erro IN cITDAC(tDadosApuracao.ID_DAC) LOOP
+		  vDetalhe:= vDetalhe||Chr(10)||'('||erro.ID||'/'||erro.CD_PROCEDIMENTO||') '||erro.DS_OBSERVACAO_IMPORTACAO;
+		  nErro:= nErro+1;
+		END LOOP;
+		vDetalhe:= vDetalhe||Chr(10)||'Total de Ocorrências: '||nErro;
+		pDetalhe:= vDetalhe;
+    EXCEPTION
+     WHEN OTHERS THEN
+		null;
+	END;
+    RAISE eERRO;
+  END IF;
+
+  pDetalhe:= vDetalhe;
+
+
+EXCEPTION
+  WHEN eERRO THEN
+    pMSG_ERRO:= vMSG_ERRO;
+	pDetalhe:= vDetalhe;
+  WHEN OTHERS THEN
+     pMSG_ERRO:= 'Problema ao apagar importação de XML anterior.'||Chr(10)||SQLERRM;
+
+END PRC_DAC_APURA_LOTE;
+
+
+PROCEDURE P_DAC_LIMPA_HISTORICO(tDadosApuracao IN recDadosApuracao, pMSG_ERRO OUT VARCHAR2) IS
+
+  vMSG_ERRO VARCHAR2(2000);
+  nACHOU    NUMBER;
+  eSAIDA    EXCEPTION;
+
+BEGIN
+  SELECT Count(*)
+    INTO nACHOU
+    FROM DBAMV.FINAN_RECEB
+   WHERE TP_ORIGEM = 'TISS_LOTE_APURACAO'
+   --AND TP_STATUS = 'PR'
+     AND DT_RECEBIMENTO IS NOT NULL
+     AND CD_ORIGEM = tDadosApuracao.ID_DAC;
+
+  -- Esta validação tem que existir -- SR/OSW 28/12/2021
+  IF nACHOU > 0 THEN
+    vMSG_ERRO:= 'ATENÇÃO: Existe movimentação financeiro de baixa. Não é possível serguir com o processamento.';
+    Dbms_Output.Put_Line(vMSG_ERRO);
+    RAISE eSAIDA;
+  END IF;
+
+	DELETE DBAMV.FINAN_RECEB_ITEM
+	 WHERE CD_FINAN_RECEB IN (SELECT CD_FINAN_RECEB
+                              FROM DBAMV.FINAN_RECEB
+                             WHERE TP_ORIGEM = 'TISS_LOTE_APURACAO'
+                               AND CD_ORIGEM = tDadosApuracao.ID_DAC);
+
+	DELETE DBAMV.FINAN_RECEB
+	 WHERE TP_ORIGEM = 'TISS_LOTE_APURACAO'
+     AND CD_ORIGEM = tDadosApuracao.ID_DAC;
+
+  -- Limpa OUTROS registros obsoletos
+  FOR rBaixa IN (SELECT CD_FINAN_RECEB
+                   FROM DBAMV.FINAN_RECEB
+                  WHERE TP_ORIGEM = 'TISS_LOTE_APURACAO'
+                    --AND TP_STATUS <> 'PR'
+                    AND CD_REMESSA = tDadosApuracao.CD_REMESSA
+                    AND NR_LOTE = tDadosApuracao.NR_LOTE) LOOP
+
+	  DELETE DBAMV.FINAN_RECEB_ITEM
+	   WHERE CD_FINAN_RECEB = rBAIXA.CD_FINAN_RECEB;
+
+    DELETE DBAMV.FINAN_RECEB
+	   WHERE CD_FINAN_RECEB = rBAIXA.CD_FINAN_RECEB;
+
+  END LOOP;
+
+  -- Limpa Importações de DAC obsoletas.
+  FOR R_OLD IN (SELECT ID ID_DAC
+                  FROM DBAMV.TISS_MENSAGEM TM
+                 WHERE TM.ID <> (SELECT Max(TM2.id) FROM  DBAMV.TISS_MENSAGEM TM2
+                                   WHERE TM2.TP_TRANSACAO = 'DEMONSTRATIVO_ANALISE_CONTA'
+                                     AND TM2.ID_MENSAGEM_ORIGEM = tDadosApuracao.ID_MSG_ORIGEM
+                                )
+                   AND TM.TP_TRANSACAO = 'DEMONSTRATIVO_ANALISE_CONTA'
+                   AND TM.ID_MENSAGEM_ORIGEM = tDadosApuracao.ID_MSG_ORIGEM) LOOP
+
+    --
+    Dbms_Output.Put_Line('P_DAC_LIMPA_HISTORICO: Apagou algum histórico');
+    --
+    DELETE FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PRC_G
+        WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PROC
+                            WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA
+                                                WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_RETORNO_DEMON_CONTA_LOTE
+                                                                    WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_RETORNO_DEMON_CONTA
+                                                                                        WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_MENSAGEM WHERE ID = R_OLD.ID_DAC)))));
+    --
+    DELETE FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PROC
+        WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA
+                            WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_RETORNO_DEMON_CONTA_LOTE
+                                                WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_RETORNO_DEMON_CONTA
+                                                                   WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_MENSAGEM WHERE ID = R_OLD.ID_DAC))));
+    --
+    DELETE FROM DBAMV.TISS_RETORNO_DEMON_CTA_GLOSA_G
+        WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA
+                            WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_RETORNO_DEMON_CONTA_LOTE
+                                                WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_RETORNO_DEMON_CONTA
+                                                                   WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_MENSAGEM WHERE ID = R_OLD.ID_DAC))));
+    --
+    DELETE FROM DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA
+       WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_RETORNO_DEMON_CONTA_LOTE
+                            WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_RETORNO_DEMON_CONTA
+                                                WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_MENSAGEM WHERE ID = R_OLD.ID_DAC)));
+    --
+    DELETE FROM DBAMV.TISS_RETORNO_DEMON_CTA_LOTE_G
+       WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_RETORNO_DEMON_CONTA_LOTE
+                            WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_RETORNO_DEMON_CONTA
+                                                WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_MENSAGEM WHERE ID = R_OLD.ID_DAC)));
+    --
+    DELETE FROM DBAMV.TISS_RETORNO_DEMON_CONTA_LOTE
+        WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_RETORNO_DEMON_CONTA
+                            WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_MENSAGEM WHERE ID = R_OLD.ID_DAC));
+    --
+    DELETE FROM DBAMV.TISS_RETORNO_DEMON_CONTA
+        WHERE ID_PAI IN (SELECT ID FROM DBAMV.TISS_MENSAGEM WHERE ID = R_OLD.ID_DAC);
+    --
+    DELETE FROM DBAMV.TISS_LOG
+        WHERE ID_MENSAGEM = R_OLD.ID_DAC;
+    --
+    DELETE FROM DBAMV.TISS_MENSAGEM
+        WHERE ID = R_OLD.ID_DAC;
+
+  END LOOP;
+
+EXCEPTION
+  WHEN eSAIDA THEN
+    pMSG_ERRO:= vMSG_ERRO;
+
+  WHEN OTHERS THEN
+     pMSG_ERRO:= 'Problema ao apagar importação de XML anterior.'||Chr(10)||SQLERRM;
+
+END P_DAC_LIMPA_HISTORICO;
+
+
+
+PROCEDURE P_LIMPA_HISTORICO_ANA_CONTA(P_ID_MSG IN NUMBER, P_CD_REMESSA IN NUMBER,P_NR_LOTE IN VARCHAR2,PARAM_1 IN VARCHAR2,PARAM_2 IN VARCHAR2,PARAM_3 IN VARCHAR2, P_MSG_ERRO OUT VARCHAR2) IS
+BEGIN
+  return;
+  FOR R_ANA IN (SELECT ID, NR_LOTE
+                  FROM DBAMV.TISS_MENSAGEM
+                 WHERE ID <> P_ID_MSG
+                   AND TP_TRANSACAO = 'DEMONSTRATIVO_ANALISE_CONTA'
+                   AND NR_DOCUMENTO = TO_CHAR(P_CD_REMESSA)
+				   AND NR_LOTE = P_NR_LOTE) LOOP
+     DBAMV.pkg_ffcv_retorno_tiss.P_LIMPA_ANALISE_CONTA(R_ANA.ID, P_CD_REMESSA, R_ANA.NR_LOTE, P_MSG_ERRO);
+  END LOOP;
+EXCEPTION
+  WHEN OTHERS THEN
+     P_MSG_ERRO:= 'Problema ao apagar importação de XML anterior.'||Chr(10)||SQLERRM;
+END P_LIMPA_HISTORICO_ANA_CONTA;
+
+
+FUNCTION F_EXISTE_DEM_RETORNO_LOTE(P_ID_LOTE IN NUMBER) RETURN BOOLEAN IS
+  nACHOU NUMBER;
+BEGIN
+    SELECT Count(*)
+      INTO nACHOU
+      FROM DBAMV.DEMONSTRATIVO_RETORNO_LOTE
+     WHERE CD_SEQ_LOTE_RETORNO = P_ID_LOTE
+       AND DS_ORIGEM_IMPORTACAO = 'TISS_APURACAO';
+  IF nACHOU > 0 THEN
+    RETURN TRUE;
+  END IF;
+  RETURN FALSE;
+END F_EXISTE_DEM_RETORNO_LOTE;
+
+FUNCTION F_EXISTE_RETORNO_LOTE_TISS(P_ID_LOTE IN NUMBER) RETURN BOOLEAN IS
+  nACHOU NUMBER;
+BEGIN
+    SELECT Count(*)
+      INTO nACHOU
+      FROM DBAMV.FINAN_RECEB
+     WHERE CD_ORIGEM = P_ID_LOTE
+       AND TP_ORIGEM = 'TISS_LOTE_APURACAO';
+  IF nACHOU > 0 THEN
+    RETURN TRUE;
+  END IF;
+  RETURN FALSE;
+END F_EXISTE_RETORNO_LOTE_TISS;
+
+FUNCTION F_TP_ANALISE_RETORNO(P_ID_GUIA NUMBER) RETURN VARCHAR2 IS
+
+  nPROC_VL_LIBERADO  NUMBER;
+  nGUIA_VL_LIBERADO  NUMBER;
+  nGUIA_VL_INFORMADO NUMBER;
+
+BEGIN
+
+  IF P_ID_GUIA = 0 THEN
+     RETURN 'QUITADAS';
+  END IF;
+
+  IF P_ID_GUIA = -1 THEN
+     RETURN 'CONSULTAS';
+  END IF;
+
+  SELECT SUM(PROC_VL_LIBERADO) PROC_VL_LIBERADO, SUM(GUIA_VL_LIBERADO) GUIA_VL_LIBERADO, SUM(GUIA_VL_INFORMADO) GUIA_VL_INFORMADO
+    INTO nPROC_VL_LIBERADO
+       , nGUIA_VL_LIBERADO
+       , nGUIA_VL_INFORMADO
+    FROM (SELECT SUM(0) PROC_VL_LIBERADO, SUM(TO_NUMBER(VL_LIBERADO_GUIA,'99999999.99')) GUIA_VL_LIBERADO, SUM(TO_NUMBER(VL_INFORMADO_GUIA,'99999999.99')) GUIA_VL_INFORMADO
+            FROM dbamv.TISS_RETORNO_DEMON_CONTA_GUIA
+           WHERE ID = P_ID_GUIA
+          UNION
+          SELECT SUM(TO_NUMBER(VL_LIBERADO,'99999999.99')) PROC_VL_LIBERADO, SUM(0) LOTE_VL_LIBERADO,SUM(0) VL_INFORMADO_GUIA
+            FROM dbamv.TISS_RETORNO_DEMON_CONTA_PROC WHERE ID_PAI = P_ID_GUIA);
+
+
+  IF Nvl(nPROC_VL_LIBERADO,0) = Nvl(nGUIA_VL_LIBERADO,0) AND Nvl(nGUIA_VL_LIBERADO,0) > 0 THEN
+    RETURN 'GERAL';
+  END IF;
+
+  IF (Nvl(nPROC_VL_LIBERADO,0) < Nvl(nGUIA_VL_LIBERADO,0) AND Nvl(nGUIA_VL_LIBERADO,0) = 0) OR Nvl(nGUIA_VL_LIBERADO,0) < Nvl(nGUIA_VL_INFORMADO,0) THEN
+    RETURN 'SO_GLOSAS';
+  END IF;
+
+  RETURN 'ERR: '||P_ID_GUIA;
+
+END F_TP_ANALISE_RETORNO;
+
+FUNCTION F_TRATA_PROTOCOLO( P_PROTOCOLO VARCHAR2 ) RETURN VARCHAR2 IS
+  V_TEMP VARCHAR2( 32767 );
+  i number := 1;
+BEGIN
+  -- retira acentos e enters que o usurio tenha inserido.
+  SELECT TRANSLATE(REPLACE(P_PROTOCOLO,' '),
+                  ' ',
+                  'AEIOUaeiouCcAEIOUaeiouAaOoAaEeOo..aeiouAEIOU')
+    INTO v_temp
+    FROM DUAL;
+
+  while i <= length(v_temp) Loop
+   If (ascii(substr(v_temp,i,1)) < 65) or (ascii(substr(v_temp,i,1)) > 90) Then --(A-Z)
+      If (ascii(substr(v_temp,i,1)) < 97) or (ascii(substr(v_temp,i,1)) > 122) Then    --(a-z) --OP 8862 (Incio/Fim).
+         If (ascii(substr(v_temp,i,1)) < 48 or ascii(substr(v_temp,i,1)) > 57) AND (ascii(substr(v_temp,i,1)) <> 32 )THEN --(0-9)
+            v_temp := replace( v_temp, substr(v_temp,i,1) , null );
+            i := 1;
+         End If;
+      End If;
+    End if;
+
+    i := i+1;
+
+  End Loop;
+
+  v_temp:= SubStr(v_temp,1,12);
+
+RETURN V_TEMP;
+
+END F_TRATA_PROTOCOLO;
+
+FUNCTION F_LOTE_VL_FATURADO(P_CD_ORIGEM IN NUMBER) RETURN NUMBER IS
+
+  CURSOR vlLiberado(P_CD_ORIGEM number)IS
+    SELECT sum (to_number( tiss_it.vl_total, '999999999999999.99' )) vl_total_lote
+			from 	dbamv.tiss_guia,
+						(select distinct tl.id_pai id_envio, itf.cd_remessa
+								from dbamv.itfat_nota_fiscal itf, dbamv.tiss_lote tl
+                    , dbamv.tiss_guia tg, dbamv.tiss_itguia tit, DBAMV.TISS_MENSAGEM tm,
+                    DBAMV.TISS_MENSAGEM tmr, DBAMV.TISS_RETORNO_DEMON_CONTA_LOTE trdcl,
+                    DBAMV.TISS_RETORNO_DEMON_CONTA TRDC
+								where trdcl.id = P_CD_ORIGEM
+								  and tg.id_pai = tl.id
+                  	AND tl.id_pai = tm.id
+            AND tm.id = tmr.id_mensagem_envio
+            AND tmr.id = TRDC.id_pai
+            AND TRDC.id = trdcl.id_pai
+
+								  and tit.id_pai = tg.id
+								  and itf.id_it_envio = tit.id) remessa_filha,
+						(select 	id_pai
+										,	vl_total
+								from dbamv.tiss_itguia
+							 where nvl(tp_pagamento,'P') <> 'C'
+						   union all
+						  select 	id_pai
+										,	vl_total
+								from dbamv.tiss_itguia_out
+              union all
+							select 	id
+										,	vl_procedimento_co
+								from dbamv.tiss_guia
+							 where cd_procedimento_co is not null
+
+								) tiss_it,
+    				(select nvl(tlg.id,tl.id) tl_id
+        					, tl.nr_lote
+            			, tl.id_pai
+            			, tm.nr_documento
+      					from 	dbamv.tiss_lote				tl
+        						, dbamv.tiss_mensagem 	tm
+        						,	dbamv.tiss_lote_guia 	tlg
+        						, dbamv.tiss_mensagem 	tmr
+                    , DBAMV.TISS_RETORNO_DEMON_CONTA_LOTE trdcl
+                    , DBAMV.TISS_RETORNO_DEMON_CONTA TRDC
+    						where trdcl.id = P_CD_ORIGEM
+       					AND tl.id_pai = tm.id
+            AND tm.id = tmr.id_mensagem_origem
+            AND tmr.id = TRDC.id_pai
+            AND TRDC.id = trdcl.id_pai
+ 						and tlg.id_pai(+)	=	tl.id) lote
+			where tiss_guia.id_pai 	= lote.tl_id
+      	and tiss_it.id_pai 		= tiss_guia.id
+      	and remessa_filha.id_envio(+) = lote.id_pai;
+
+  vl_faturado NUMBER;
+
+BEGIN
+
+  OPEN vlLiberado(P_CD_ORIGEM);
+  FETCH vlLiberado INTO vl_faturado;
+  CLOSE vlLiberado;
+
+  RETURN Nvl(vl_faturado, 0);
+
+END F_LOTE_VL_FATURADO;
+
+
+PROCEDURE P_VALIDA_DADOS( P_REMESSA  NUMBER ) IS
+
+BEGIN
+
+  FOR REC IN (
+SELECT R.CD_REG_FAT,I.CD_LANCAMENTO,M.CD_ATI_MED, P_REMESSA  ||': ITEM DE CONTA HOSPITALAR (RGF/LCT/ATM:'||R.CD_REG_FAT||'/'||I.CD_LANCAMENTO||'/'||M.CD_ATI_MED||') COM REGISTRO ID_IT_ENVIO INCOSISTENTE' MSG
+  FROM DBAMV.REG_FAT R
+     , DBAMV.ITREG_FAT I
+     , DBAMV.ITLAN_MED M
+ WHERE R.CD_REMESSA = P_REMESSA
+   AND R.CD_REG_FAT = I.CD_REG_FAT
+   AND I.CD_REG_FAT = M.CD_REG_FAT
+   AND I.CD_LANCAMENTO = M.CD_LANCAMENTO
+   AND (I.ID_IT_ENVIO IS NOT NULL AND M.ID_IT_ENVIO IS NULL
+    OR I.ID_IT_ENVIO IS NULL AND M.ID_IT_ENVIO IS NULL)
+   AND M.TP_PAGAMENTO NOT IN ('C','F')
+    ORDER BY 1,2,3 ) LOOP
+
+       Dbms_Output.Put_Line(REC.MSG);
+
+  END LOOP;
+
+END P_VALIDA_DADOS;
+
+PROCEDURE P_DAC_VALIDA_APURACAO(pPROCESSO IN NUMBER,tDadosApuracao IN recDadosApuracao) IS
+
+BEGIN
+
+  IF pPROCESSO = 0 THEN
+
+    FOR REC IN ( SELECT R.CD_REG_FAT,I.CD_LANCAMENTO,M.CD_ATI_MED, R.CD_REMESSA ||': Item de conta hospitalar (RGF/LCT/ATM:'||R.CD_REG_FAT||'/'||I.CD_LANCAMENTO||'/'||M.CD_ATI_MED||') com registro ID_IT_ENVIO incosistente' MSG
+                   FROM DBAMV.REG_FAT R
+                      , DBAMV.ITREG_FAT I
+                      , DBAMV.ITLAN_MED M
+                  WHERE R.CD_REMESSA = tDadosApuracao.CD_REMESSA
+                    AND R.CD_REG_FAT = I.CD_REG_FAT
+                    AND I.CD_REG_FAT = M.CD_REG_FAT
+                    AND I.CD_LANCAMENTO = M.CD_LANCAMENTO
+                    AND (I.ID_IT_ENVIO IS NOT NULL AND M.ID_IT_ENVIO IS NULL
+                     OR I.ID_IT_ENVIO IS NULL AND M.ID_IT_ENVIO IS NULL)
+                    AND M.TP_PAGAMENTO NOT IN ('C','F')
+                  ORDER BY 1,2,3 ) LOOP
+
+      Dbms_Output.Put_Line(REC.MSG);
+
+    END LOOP;
+
+  END IF;
+
+  IF pPROCESSO = 0 THEN
+    FOR rVal IN (  SELECT id,cd_procedimento_ret,qt_executada_ret,vl_informado_ret
+                        , Nvl(cd_procedimento_envio,cd_procedimento_envio_out) cd_procedimento_envio
+                        , Nvl(qt_envio,qt_envio_out) qt_envio
+                        , Nvl(vl_informado_envio,vl_informado_envio_out) vl_informado_envio
+                        , ds_observacao_importacao
+                        , id_it_envio
+                        , id_guia
+                   FROM ( SELECT dcp.id
+                               , dcp.cd_procedimento cd_procedimento_ret
+                               , dcp.qt_executada qt_executada_ret
+                               , dcp.vl_informado vl_informado_ret
+                               , dcg.id id_guia
+                               , (SELECT tiss_itguia.cd_procedimento FROM DBAMV.tiss_itguia WHERE id = id_it_envio) cd_procedimento_envio
+                               , (SELECT tiss_itguia.qt_realizada FROM DBAMV.tiss_itguia WHERE id = id_it_envio) qt_envio
+                               , (SELECT tiss_itguia.vl_total FROM DBAMV.tiss_itguia WHERE id = id_it_envio) vl_informado_envio
+                               , (SELECT tiss_itguia_out.cd_procedimento FROM DBAMV.tiss_itguia_out WHERE id = id_it_envio) cd_procedimento_envio_out
+                               , (SELECT tiss_itguia_out.qt_realizada FROM DBAMV.tiss_itguia_out WHERE id = id_it_envio) qt_envio_out
+                               , (SELECT tiss_itguia_out.vl_total FROM DBAMV.tiss_itguia_out WHERE id = id_it_envio) vl_informado_envio_out
+                               , dcp.ds_observacao_importacao
+                               , id_it_envio
+                            FROM dbamv.tiss_retorno_demon_conta_proc dcp
+                               , dbamv.tiss_retorno_demon_conta_guia dcg
+
+                            WHERE dcp.id_pai = dcg.id
+                              AND dcg.id_pai = tDadosApuracao.ID_DLT )
+                            WHERE (cd_procedimento_ret <> Nvl(cd_procedimento_envio,cd_procedimento_envio_out)
+                            OR To_Number(qt_executada_ret) <> To_Number(Nvl(qt_envio,qt_envio_out))
+                            OR To_Number(vl_informado_ret,'99999999.99') <> To_Number(Nvl(vl_informado_envio,vl_informado_envio_out),'99999999.99'))
+                            AND NOT EXISTS (SELECT 'X'
+			                                        FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PROC DP1
+                                                 , DBAMV.ITFAT_NOTA_FISCAL ITF2
+                                                 , DBAMV.IT_RECEBIMENTO IR
+			                                       WHERE DP1.ID_PAI       = id_guia
+			                                         AND ITF2.CD_REMESSA  = tDadosApuracao.CD_REMESSA
+			                                         AND ITF2.ID_IT_ENVIO = DP1.ID_IT_ENVIO
+			                                         AND IR.CD_ITFAT_NF   = ITF2.CD_ITFAT_NF)
+
+                            ) LOOP
+
+      Dbms_Output.Put_Line('AVISO: Falhou ('||rVal.id_it_envio||') Verifique (Envio x Retorno) em Procedimento,Qtd e Valor: E/R: '
+                          ||rval.cd_procedimento_envio||'/'||rval.cd_procedimento_ret||', '
+                          ||rval.qt_envio||'/'||rval.qt_executada_ret||', '
+                          ||rval.vl_informado_envio||'/'||rval.vl_informado_ret||Chr(10)
+                          ||rval.ds_observacao_importacao);
+
+    END LOOP;
+  END IF;
+
+
+END P_DAC_VALIDA_APURACAO;
+
+
+PROCEDURE P_GET_RESUMO_PAGAMENTO(P_CD_ORIGEM IN VARCHAR,
+                                 TM_ID OUT NUMBER,
+                                 NR_DEMONSTRATIVO OUT VARCHAR,
+                                 DT_EMISSAO OUT DATE,
+                                 DT_PAGAMENTO OUT DATE,
+                                 TP_PAGAMENTO OUT VARCHAR,
+                                 CD_BANCO OUT VARCHAR,
+                                 CD_AGENCIA OUT VARCHAR,
+                                 NR_CONTA OUT VARCHAR,
+                                 VL_TOT_GLOSA OUT VARCHAR,
+                                 VL_FINAL_LIBERADO OUT VARCHAR) IS
+
+  CURSOR cResumoPagamento(P_ID_TRANSACAO_ENVIO NUMBER) IS
+     SELECT DISTINCT TDPR.ID TM_ID,
+           TDP.NR_DEMONSTRATIVO,
+           DBAMV.PKG_TISS_UTIL.F_DT(TDP.DT_EMISSAO,NULL) DT_EMISSAO,
+           DBAMV.PKG_TISS_UTIL.F_DT(PGDT.DT_PAGAMENTO,NULL) DT_PAGAMENTO,
+           PGDT.TP_FORMA_PAGAMENTO TP_PAGAMENTO,
+           PGDT.DS_BANCO CD_BANCO,
+           PGDT.DS_AGENCIA CD_AGENCIA,
+           PGDT.NR_CONTA_CHEQUE NR_CONTA,
+           TDP.VL_TOT_GLOSA,
+           TDP.VL_FINAL_LIBERADO
+        FROM dbamv.TISS_RETORNO_DEMON_PAG TDP,
+            dbamv.TISS_RETORNO_DEMON_PAG_DT PGDT,
+            dbamv.TISS_RETORNO_DEMON_PAG_RESUMO TDPR,
+            dbamv.tiss_mensagem TM,
+            dbamv.TISS_RETORNO_DEMON_CONTA trdc,
+            dbamv.TISS_RETORNO_DEMON_CONTA_LOTE trdcl
+      where TDP.ID = PGDT.ID_PAI
+        AND TDPR.ID_PAI = PGDT.ID
+        AND TDPR.ID_MENSAGEM_ENVIO = TM.id_mensagem_envio
+        AND TM.id = trdc.id_pai
+        AND trdcl.id_pai = trdc.id
+        AND trdcl.id = P_ID_TRANSACAO_ENVIO;
+
+  rResumoPagamento cResumoPagamento%ROWTYPE;
+
+BEGIN
+
+  OPEN cResumoPagamento(P_CD_ORIGEM);
+  FETCH cResumoPagamento INTO rResumoPagamento;
+  CLOSE cResumoPagamento;
+
+  TM_ID             := rResumoPagamento.TM_ID;
+  NR_DEMONSTRATIVO  := rResumoPagamento.NR_DEMONSTRATIVO;
+  DT_EMISSAO        := rResumoPagamento.DT_EMISSAO;
+  DT_PAGAMENTO      := rResumoPagamento.DT_PAGAMENTO;
+  TP_PAGAMENTO      := rResumoPagamento.TP_PAGAMENTO;
+  CD_BANCO          := rResumoPagamento.CD_BANCO;
+  CD_AGENCIA        := rResumoPagamento.CD_AGENCIA;
+  NR_CONTA          := rResumoPagamento.NR_CONTA;
+  VL_TOT_GLOSA      := rResumoPagamento.VL_TOT_GLOSA;
+  VL_FINAL_LIBERADO := rResumoPagamento.VL_FINAL_LIBERADO;
+
+END;
+
+PROCEDURE P_DAC_CONCILIA_ITEM( P_MSG_ENVIO IN NUMBER, P_FORCA BOOLEAN, pMSG_ERRO OUT VARCHAR2) IS
+
+  CURSOR cITENS_DAC( pMSG_ENVIO NUMBER
+                   , pCONCILIADOS VARCHAR2 ) IS
+    SELECT DAC.ID ID_DAC
+         , DLT.ID ID_DLT
+         , DCG.ID ID_DCG
+         , DCI.ID ID_DCI
+         , DCG.CD_ATENDIMENTO
+         , Nvl(DCG.CD_REG_FAT,DCG.CD_REG_AMB) CD_CONTA
+         , DCG.NR_GUIA
+         , DLT.NR_LOTE
+         , DCG.NR_SENHA
+         , DCG.NR_GUIA_OPERADORA
+         , DCI.ID_IT_ENVIO
+         , DCI.TP_TAB_FAT
+         , DCI.CD_PROCEDIMENTO
+         , DCI.CD_ATI_MED
+         , DCI.QT_EXECUTADA
+         , DCI.VL_INFORMADO
+         , DCI.SQ_ITEM
+      FROM DBAMV.TISS_MENSAGEM                 MSG
+         , DBAMV.TISS_RETORNO_DEMON_CONTA      DAC
+         , DBAMV.TISS_RETORNO_DEMON_CONTA_LOTE DLT
+         , DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA DCG
+         , DBAMV.TISS_RETORNO_DEMON_CONTA_PROC DCI
+     WHERE MSG.TP_TRANSACAO = 'DEMONSTRATIVO_ANALISE_CONTA'
+       AND MSG.ID = DAC.ID_PAI
+       AND DAC.ID = DLT.ID_PAI
+       AND DLT.ID = DCG.ID_PAI
+       AND DCG.ID = DCI.ID_PAI
+       AND MSG.ID_MENSAGEM_ORIGEM = P_MSG_ENVIO
+       AND ((NVL(pCONCILIADOS,'N') = 'S' AND DCI.ID_IT_ENVIO IS NOT NULL) OR DCI.ID_IT_ENVIO IS NULL);
+       /*
+       AND ((NVL(pCONCILIADOS,'N') = 'S' AND DCI.ID_ENVIO_SR IS NOT NULL)
+          OR (NVL(pCONCILIADOS,'N') = 'N' AND DCI.ID_ENVIO_SR IS NULL));
+       */
+
+  CURSOR cTISS_GUIA ( pATENDIMENTO NUMBER
+                    , pGUIA in VARCHAR2
+                    , pLOTE VARCHAR2
+                    , pSENHA VARCHAR2
+                    , pGUIA_OPERADORA VARCHAR2) IS
+     SELECT TG.ID ID_GUIA
+       FROM DBAMV.TISS_GUIA TG,
+            DBAMV.TISS_LOTE TL
+      WHERE TL.ID                   = TG.ID_PAI
+        AND TG.CD_ATENDIMENTO       = pATENDIMENTO
+        AND LPAD(TG.NR_GUIA,20,'0') = LPAD(pGUIA,20,'0')
+        AND TL.NR_LOTE              = pLOTE
+        AND (TG.CD_SENHA            = pSENHA OR pSENHA IS NULL)
+        AND (TG.NR_GUIA_OPERADORA   = pGUIA_OPERADORA OR pGUIA_OPERADORA IS NULL);
+
+
+  CURSOR cITENS_GUIA (pID_GUIA_ENVIO      NUMBER,      --< Obrigatrio nas 2 opes
+                      --
+                      pID_DAC_GUIA        NUMBER,      --< 1a. Opo
+                      pID_DAC_ITEM        NUMBER,
+                      --
+                      pvTpTabRet          VARCHAR2,    --< 2a. Opo
+                      pvCdProcedRet       VARCHAR2,    --< 2a. Opo
+                      pvCdAtiMedRet       VARCHAR2,    --< 2a. Opo
+                      pvQtSolRet          VARCHAR2,    --< 2a. Opo
+                      pvVlTotEnvRet       VARCHAR2     --< 2a. Opo
+                     ) Is
+
+       SELECT ITENS_GUIA.ID ID_TISS_ITGUIA
+            , ITENS_GUIA.TP_TAB_FAT
+            , ITENS_GUIA.CD_PROCEDIMENTO
+            , ITENS_GUIA.QT_REALIZADA
+            , ITENS_GUIA.VL_TOTAL
+            , (SELECT SUM(ITF.VL_ITFAT_NF) VL_ITFAT_TOT FROM DBAMV.ITFAT_NOTA_FISCAL ITF WHERE ITF.ID_IT_ENVIO  = ITENS_GUIA.ID) VL_ITFAT_TOT
+         FROM DBAMV.TISS_GUIA GUIA_ENVIO
+            , (SELECT IT.ID
+                    , IT.ID_PAI
+                    , IT.TP_TAB_FAT
+                    , IT.CD_PROCEDIMENTO
+                    , IT.QT_REALIZADA
+                    , IT.VL_TOTAL
+                    , IT.DT_REALIZADO
+                    , IT.TP_PAGAMENTO
+                 FROM DBAMV.TISS_ITGUIA IT
+                WHERE ID_PAI = pID_GUIA_ENVIO
+               UNION ALL
+              SELECT OU.ID
+                   , OU.ID_PAI
+                   , OU.TP_TAB_FAT
+                   , OU.CD_PROCEDIMENTO
+                   , OU.QT_REALIZADA
+                   , OU.VL_TOTAL
+                   , OU.DT_REALIZADO
+                   , 'X' TP_PAGAMENTO
+                FROM DBAMV.TISS_ITGUIA_OUT OU
+               WHERE ID_PAI = pID_GUIA_ENVIO) ITENS_GUIA
+            , (SELECT RET.TP_TAB_FAT
+                    , RET.CD_PROCEDIMENTO
+                    , RET.CD_ATI_MED
+                    , RET.QT_EXECUTADA
+                    , RET.VL_PROCESSADO
+                    , RET.VL_INFORMADO
+                    , RET.DT_REALIZACAO
+                  FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PROC RET
+                 WHERE pID_DAC_ITEM IS NOT NULL
+                   AND RET.ID  = pID_DAC_ITEM
+                UNION ALL
+                SELECT pvTpTabRet       TP_TAB_FAT
+                     , pvCdProcedRet    CD_PROCEDIMENTO
+                     , pvCdAtiMedRet    CD_ATI_MED
+                     , pvQtSolRet       QT_EXECUTADA
+                     , pvVlTotEnvRet    VL_PROCESSADO
+                     , pvVlTotEnvRet    VL_INFORMADO
+                     , To_Char(NULL)    DT_REALIZACAO
+                  FROM SYS.DUAL
+                 WHERE pID_DAC_ITEM IS NULL ) DAC
+        WHERE GUIA_ENVIO.ID = ITENS_GUIA.ID_PAI
+          AND GUIA_ENVIO.ID              = pID_GUIA_ENVIO
+          AND ITENS_GUIA.TP_PAGAMENTO    <> 'C'
+          AND ITENS_GUIA.TP_TAB_FAT      = NVL(DAC.TP_TAB_FAT,ITENS_GUIA.TP_TAB_FAT)
+          AND RTRIM(LTRIM(ITENS_GUIA.CD_PROCEDIMENTO)) = RTRIM(LTRIM(DAC.CD_PROCEDIMENTO))
+          AND TO_NUMBER(ITENS_GUIA.QT_REALIZADA,'9999999.9999') = TO_NUMBER(NVL(DAC.QT_EXECUTADA,ITENS_GUIA.QT_REALIZADA),'9999999.9999')
+          AND TO_NUMBER(ITENS_GUIA.VL_TOTAL,'9999999.99') = TO_NUMBER(NVL(NVL(DAC.VL_INFORMADO,DAC.VL_PROCESSADO),ITENS_GUIA.VL_TOTAL),'9999999.99')
+          AND NVL(NVL(DAC.DT_REALIZACAO,ITENS_GUIA.DT_REALIZADO),'X') = NVL(ITENS_GUIA.DT_REALIZADO,'X')
+          AND NOT EXISTS (SELECT 'X'
+                            FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PROC DAC_PROC
+                           WHERE DAC_PROC.ID_IT_ENVIO  = ITENS_GUIA.ID
+                             AND DAC_PROC.ID_PAI = pID_DAC_GUIA);
+
+
+  CURSOR cSQ_ITENS (pID_GUIA_ENVIO      NUMBER,
+                    pID_DAC_GUIA        NUMBER,
+                    pID_DAC_ITEM        NUMBER) Is
+
+       SELECT ITENS_GUIA.ID ID_TISS_ITGUIA
+            , ITENS_GUIA.TP_TAB_FAT
+            , ITENS_GUIA.CD_PROCEDIMENTO
+            , ITENS_GUIA.QT_REALIZADA
+            , ITENS_GUIA.VL_TOTAL
+            , (SELECT SUM(ITF.VL_ITFAT_NF) VL_ITFAT_TOT FROM DBAMV.ITFAT_NOTA_FISCAL ITF WHERE ITF.ID_IT_ENVIO  = ITENS_GUIA.ID) VL_ITFAT_TOT
+         FROM DBAMV.TISS_GUIA GUIA_ENVIO
+            , (SELECT IT.ID
+                    , IT.ID_PAI
+                    , IT.TP_TAB_FAT
+                    , IT.CD_PROCEDIMENTO
+                    , IT.QT_REALIZADA
+                    , IT.VL_TOTAL
+                    , IT.DT_REALIZADO
+                    , IT.TP_PAGAMENTO
+                    , IT.SQ_ITEM
+                 FROM DBAMV.TISS_ITGUIA IT
+                WHERE ID_PAI = pID_GUIA_ENVIO
+               UNION ALL
+              SELECT OU.ID
+                   , OU.ID_PAI
+                   , OU.TP_TAB_FAT
+                   , OU.CD_PROCEDIMENTO
+                   , OU.QT_REALIZADA
+                   , OU.VL_TOTAL
+                   , OU.DT_REALIZADO
+                   , 'X' TP_PAGAMENTO
+                    , OU.SQ_ITEM
+                FROM DBAMV.TISS_ITGUIA_OUT OU
+               WHERE ID_PAI = pID_GUIA_ENVIO) ITENS_GUIA
+            , (SELECT RET.TP_TAB_FAT
+                    , RET.CD_PROCEDIMENTO
+                    , RET.CD_ATI_MED
+                    , RET.QT_EXECUTADA
+                    , RET.VL_PROCESSADO
+                    , RET.VL_INFORMADO
+                    , RET.DT_REALIZACAO
+                    , RET.SQ_ITEM
+                  FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PROC RET
+                 WHERE pID_DAC_ITEM IS NOT NULL
+                   AND RET.ID  = pID_DAC_ITEM ) DAC
+        WHERE GUIA_ENVIO.ID = ITENS_GUIA.ID_PAI
+          AND GUIA_ENVIO.ID              = pID_GUIA_ENVIO
+          AND ITENS_GUIA.TP_PAGAMENTO    <> 'C'
+          AND ITENS_GUIA.TP_TAB_FAT      = NVL(DAC.TP_TAB_FAT,ITENS_GUIA.TP_TAB_FAT)
+          AND ITENS_GUIA.CD_PROCEDIMENTO = DAC.CD_PROCEDIMENTO
+          AND TO_NUMBER(ITENS_GUIA.VL_TOTAL,'9999999.99') = TO_NUMBER(NVL(NVL(DAC.VL_INFORMADO,DAC.VL_PROCESSADO),ITENS_GUIA.VL_TOTAL),'9999999.99')
+          AND (ITENS_GUIA.SQ_ITEM = DAC.SQ_ITEM AND DAC.SQ_ITEM IS NOT NULL )
+          AND NOT EXISTS (SELECT 'X'
+                            FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PROC DAC_PROC
+                           WHERE DAC_PROC.ID_IT_ENVIO  = ITENS_GUIA.ID
+                             AND DAC_PROC.ID_PAI = pID_DAC_GUIA);
+
+  CURSOR cID_LOTE IS
+    SELECT DLT.ID ID_DLT
+      FROM DBAMV.TISS_MENSAGEM                 MSG
+         , DBAMV.TISS_RETORNO_DEMON_CONTA      DAC
+         , DBAMV.TISS_RETORNO_DEMON_CONTA_LOTE DLT
+     WHERE MSG.TP_TRANSACAO = 'DEMONSTRATIVO_ANALISE_CONTA'
+       AND MSG.ID = DAC.ID_PAI
+       AND DAC.ID = DLT.ID_PAI
+       AND MSG.ID_MENSAGEM_ORIGEM = P_MSG_ENVIO;
+
+  nItensProcRet      NUMBER:=0;
+  nPendConciliados   NUMBER:=0;
+  nOKConciliados     NUMBER:=0;
+  nTotalConciliados  NUMBER:=0;
+  nTotalNConciliados NUMBER:=0;
+  nID_LOTE           NUMBER;
+
+BEGIN
+
+  --| Apaga conciliação anterior, se existir |----------------------------------
+
+  IF P_FORCA THEN
+    FOR rIDEnvio IN cITENS_DAC(P_MSG_ENVIO,'S') LOOP
+      UPDATE dbamv.TISS_RETORNO_DEMON_CONTA_PROC
+         SET ID_IT_ENVIO = NULL
+       WHERE id = rIDEnvio.ID_DCI;
+    END LOOP;
+  END IF;
+
+  ------------------------------------------------------------------------------
+
+  OPEN cID_LOTE;
+    FETCH cID_LOTE INTO nID_LOTE;
+  CLOSE cID_LOTE;
+
+  SELECT Count(*)
+    INTO nItensProcRet
+    FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PROC   P
+       , DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA G
+   WHERE P.ID_PAI = G.ID
+     AND G.ID_PAI = nID_LOTE;
+
+  SELECT Count(*)
+    INTO nPendConciliados
+    FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PROC   P
+       , DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA G
+   WHERE P.ID_PAI = G.ID
+     AND G.ID_PAI = nID_LOTE
+     AND P.ID_IT_ENVIO IS NULL;
+
+  SELECT Count(*)
+    INTO nOKConciliados
+    FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PROC   P
+       , DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA G
+   WHERE P.ID_PAI = G.ID
+     AND G.ID_PAI = nID_LOTE
+     AND P.ID_IT_ENVIO IS NOT NULL;
+
+
+  --| INICIO | Demonstrativo de Conta/Lote(S)/Guia(S)/Item(ns)
+  -- Registrar as ocorrências item-a-item para os campos ID_IT_ENVIO e Observação
+  FOR rITENS_DAC IN cITENS_DAC(P_MSG_ENVIO,'N') LOOP
+    DECLARE
+
+      rTISS_GUIA  cTISS_GUIA%ROWTYPE;
+      rITENS_GUIA cITENS_GUIA%ROWTYPE;
+      rSQ_ITENS   cSQ_ITENS%ROWTYPE;
+      --
+      nID_ENVIO NUMBER;
+      vOBSERVACAO VARCHAR2(2000);
+      eREGISTRA_OCORRENCIA EXCEPTION;
+      --
+      nPasso NUMBER;
+
+    BEGIN
+
+      nID_ENVIO:= NULL;
+      rTISS_GUIA:= NULL;
+
+      --| 1 | Tenta encontrar a GUIA de ENVIO/TISS_GUIA ------------------------
+      -- Se não encontrar, encerra o processamento registrando o motivo.
+      OPEN cTISS_GUIA( rITENS_DAC.CD_ATENDIMENTO
+                     , rITENS_DAC.NR_GUIA
+                     , rITENS_DAC.NR_LOTE
+                     , rITENS_DAC.NR_SENHA
+                     , rITENS_DAC.NR_GUIA_OPERADORA );
+        FETCH cTISS_GUIA INTO rTISS_GUIA;
+      CLOSE cTISS_GUIA;
+
+      IF rTISS_GUIA.ID_GUIA IS NULL THEN
+        nPasso:= 1;
+        nID_ENVIO  := NULL;
+        vOBSERVACAO:= 'Não conciliado/Guia não encontrada';
+        RAISE eREGISTRA_OCORRENCIA;
+      END IF;
+      --Fim 1 ------------------------------------------------------------------
+
+      --| 2 | Nova conciliação, tenta encontrar pelo SQ_ITEM -------------------
+      OPEN cSQ_ITENS( rTISS_GUIA.ID_GUIA
+                    , rITENS_DAC.ID_DCG
+                    , rITENS_DAC.ID_DCI );
+        FETCH cSQ_ITENS into rSQ_ITENS;
+      CLOSE cSQ_ITENS;
+
+      IF rSQ_ITENS.ID_TISS_ITGUIA IS NOT NULL THEN
+        nPasso:= 2;
+        nID_ENVIO := rSQ_ITENS.ID_TISS_ITGUIA;
+        vOBSERVACAO := NULL;
+        RAISE eREGISTRA_OCORRENCIA;
+      END IF;
+
+      -- Fim 2 -----------------------------------------------------------------
+
+      --| 3 | Conciliação padrão, tenta encontrar sem manipular os dados -------
+      OPEN cITENS_GUIA( rTISS_GUIA.ID_GUIA
+                      , rITENS_DAC.ID_DCG
+                      , rITENS_DAC.ID_DCI
+                      , NULL
+                      , NULL
+                      , NULL
+                      , NULL
+                      , NULL );
+        FETCH cITENS_GUIA into rITENS_GUIA;
+      CLOSE cITENS_GUIA;
+
+      IF rITENS_GUIA.ID_TISS_ITGUIA IS NOT NULL THEN
+        nPasso:= 3;
+        nID_ENVIO := rITENS_GUIA.ID_TISS_ITGUIA;
+        vOBSERVACAO := NULL;
+        RAISE eREGISTRA_OCORRENCIA;
+      END IF;
+      -- Fim 3 -----------------------------------------------------------------
+
+      --| 4 | Tentativa completando os digtos do procedimento para 10 ----------
+      rITENS_GUIA := NULL;
+      OPEN cITENS_GUIA( rTISS_GUIA.ID_GUIA
+                      , rITENS_DAC.ID_DCG
+                      , NULL
+                      , rITENS_DAC.TP_TAB_FAT
+                      , '00'||rITENS_DAC.CD_PROCEDIMENTO
+                      , rITENS_DAC.CD_ATI_MED
+                      , rITENS_DAC.QT_EXECUTADA
+                      , rITENS_DAC.VL_INFORMADO );
+        FETCH cITENS_GUIA into rITENS_GUIA;
+      CLOSE cITENS_GUIA;
+
+      IF rITENS_GUIA.ID_TISS_ITGUIA IS NOT NULL THEN
+        nPasso:= 4;
+        nID_ENVIO  := rITENS_GUIA.ID_TISS_ITGUIA;
+        vOBSERVACAO:= 'Conciliado c/ observação: Procedimento difere do enviado ('||rITENS_DAC.CD_PROCEDIMENTO||'<>'||rITENS_GUIA.CD_PROCEDIMENTO||')';
+        RAISE eREGISTRA_OCORRENCIA;
+      END IF;
+      -- Fim 4 -----------------------------------------------------------------
+
+      -- | 5 | Tentativa desconsiderando a quantidade do item ------------------
+      rITENS_GUIA := NULL;
+      OPEN cITENS_GUIA( rTISS_GUIA.ID_GUIA
+                      , rITENS_DAC.ID_DCG
+                      , NULL
+                      , rITENS_DAC.TP_TAB_FAT
+                      , rITENS_DAC.CD_PROCEDIMENTO
+                      , rITENS_DAC.CD_ATI_MED
+                      , NULL
+                      , rITENS_DAC.VL_INFORMADO );
+        FETCH cITENS_GUIA INTO rITENS_GUIA;
+      CLOSE cITENS_GUIA;
+
+      IF rITENS_GUIA.ID_TISS_ITGUIA IS NOT NULL THEN
+        nPasso:= 5;
+        nID_ENVIO  := rITENS_GUIA.ID_TISS_ITGUIA;
+        --IF rITENS_DAC.QT_EXECUTADA<>rITENS_GUIA.QT_REALIZADA THEN -- Corrigir isso. --SR/OSW
+          vOBSERVACAO:= 'Conciliado c/ observação:  Qtd do Item difere do enviado ('||rITENS_DAC.QT_EXECUTADA||'<>'||rITENS_GUIA.QT_REALIZADA||')';
+        --END IF;
+        RAISE eREGISTRA_OCORRENCIA;
+      END IF;
+      -- Fim 5 -----------------------------------------------------------------
+
+      --| 6 | Tentativa desconsiderando o tipo da tabela do lançamento --------
+      rITENS_GUIA := NULL;
+      OPEN cITENS_GUIA( rTISS_GUIA.ID_GUIA
+                      , rITENS_DAC.ID_DCG
+                      , NULL
+                      , rITENS_DAC.TP_TAB_FAT
+                      , rITENS_DAC.CD_PROCEDIMENTO
+                      , rITENS_DAC.CD_ATI_MED
+                      , rITENS_DAC.QT_EXECUTADA
+                      , rITENS_DAC.VL_INFORMADO );
+        FETCH cITENS_GUIA into rITENS_GUIA;
+      CLOSE cITENS_GUIA;
+
+      IF rITENS_GUIA.ID_TISS_ITGUIA IS NOT NULL THEN
+        nPasso:= 6;
+        nID_ENVIO  := rITENS_GUIA.ID_TISS_ITGUIA;
+        RAISE eREGISTRA_OCORRENCIA;
+      END IF;
+      --  Fim 6 ----------------------------------------------------------------
+
+      --| 7 | Tentativa desconsiderando o tp tabela, proced e quantidade -------
+      rITENS_GUIA := NULL;
+      OPEN cITENS_GUIA( rTISS_GUIA.ID_GUIA
+                      , rITENS_DAC.ID_DCG
+                      , NULL
+                      , NULL
+                      , '00'||rITENS_DAC.CD_PROCEDIMENTO
+                      , rITENS_DAC.CD_ATI_MED
+                      , NULL
+                      , rITENS_DAC.VL_INFORMADO );
+        FETCH cITENS_GUIA into rITENS_GUIA;
+      CLOSE cITENS_GUIA;
+
+      IF rITENS_GUIA.ID_TISS_ITGUIA IS NOT NULL THEN
+        nPasso:= 7;
+        nID_ENVIO  := rITENS_GUIA.ID_TISS_ITGUIA;
+        vOBSERVACAO:= 'Conciliado c/ observação: Tipo da Tabela, Procedimento e Qtd do Item diferem do enviado';
+        RAISE eREGISTRA_OCORRENCIA;
+      END IF;
+      --  Fim 7 ----------------------------------------------------------------
+
+      --| 8 | Ação final para registrar o fracasso da conciliação --------------
+      nPasso:= 8;
+      vOBSERVACAO:= 'Item não localizado na guia de envio de lote';
+      RAISE eREGISTRA_OCORRENCIA;
+      -- Fim 8 -----------------------------------------------------------------
+
+    EXCEPTION
+      WHEN eREGISTRA_OCORRENCIA THEN
+        --| 9 | Cancela conciliação se houver divergencias entre a NF e DAC ----
+        IF rITENS_GUIA.ID_TISS_ITGUIA IS NOT NULL
+          AND NVL(rITENS_GUIA.VL_ITFAT_TOT,0) <> NVL(TO_NUMBER(rITENS_DAC.VL_INFORMADO,'9999999.99'),0) THEN
+          nPasso:= 9;
+          nID_ENVIO  := NULL;
+          vOBSERVACAO:= 'CONCILIACÃO cancelada: Envio e NF com valores divergentes (DAC/'||To_Char(rITENS_DAC.ID_DCI)||'=> '||rITENS_DAC.VL_INFORMADO
+                     ||' x Envio/'||To_Char(rITENS_GUIA.ID_TISS_ITGUIA)||'=> '||To_Char(rITENS_GUIA.VL_TOTAL)||' x NF=> '||NVL(rITENS_GUIA.VL_ITFAT_TOT,0)||')';
+        END IF;
+        -- Fim 9 ---------------------------------------------------------------
+
+        UPDATE DBAMV.TISS_RETORNO_DEMON_CONTA_PROC
+           SET ID_IT_ENVIO = nID_ENVIO
+             , DS_OBSERVACAO_IMPORTACAO = vOBSERVACAO
+         WHERE ID = rITENS_DAC.ID_DCI;
+
+      WHEN OTHERS THEN
+        pMSG_ERRO:= 'P_DAC_CONCILIA_ITEM.'||nPasso||': '||SQLERRM;
+        Dbms_Output.Put_Line(pMSG_ERRO);
+
+    END;
+
+  END LOOP;
+
+  SELECT Count(*)
+    INTO nTotalConciliados
+    FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PROC   P
+       , DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA G
+   WHERE P.ID_PAI = G.ID
+     AND G.ID_PAI = nID_LOTE
+     AND P.ID_IT_ENVIO IS NOT NULL;
+
+  SELECT Count(*)
+    INTO nTotalNConciliados
+    FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PROC   P
+       , DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA G
+   WHERE P.ID_PAI = G.ID
+     AND G.ID_PAI = nID_LOTE
+     AND P.ID_IT_ENVIO IS NULL;
+
+  IF (nTotalConciliados + nOKConciliados) <> nItensProcRet THEN
+    Dbms_Output.Put_Line('AVISO: Divergência na conciliação dos itens.');
+    Dbms_Output.Put_Line('     Total de itens no retorno para apuração.......: '||nItensProcRet);
+    Dbms_Output.Put_Line('     Total de itens pendentes para processamento...: '||nPendConciliados);
+    Dbms_Output.Put_Line('     Total de itens já conciliados anteriormente...: '||nOKConciliados);
+    Dbms_Output.Put_Line('     Total de itens conciliados neste processamento: '||nTotalConciliados);
+    Dbms_Output.Put_Line('     Total de itens NÃO conciliados, FALHA.........: '||nTotalNConciliados);
+    Dbms_Output.Put_Line(null);
+
+  END IF;
+
+END P_DAC_CONCILIA_ITEM;
+
+
+
+FUNCTION FNC_DAC_APURA_LOTE(pIdMsgLoteEnvio IN NUMBER
+							             ,tDadosApuracao OUT recDadosApuracao) RETURN BOOLEAN IS
+
+  vMsgErro VARCHAR2(2000);
+  eERRO    EXCEPTION;
+  V_IDPRC  VARCHAR2(1);
+
+BEGIN
+ -- Considerar NF???
+ -- Apagar histórico anterior de importação?
+ -- Atualizar na pai o valor das glosas
+ -- Incluir na validação dos dados, a validação da query de conciliação.
+ -- Executar conciliação
+ -- Executar apuração
+
+  V_IDPRC:= '1';
+  P_DAC_CARREGA_DADOS(pIdMsgLoteEnvio,tDadosApuracao,vMsgErro);
+  IF vMsgErro IS NOT NULL THEN
+    RAISE eERRO;
+  END IF;
+
+  --  Limpa importaes anteriores
+  V_IDPRC:= '2';
+  P_DAC_LIMPA_HISTORICO(tDadosApuracao,vMsgErro);
+  IF vMsgErro IS NOT NULL THEN
+    RAISE eERRO;
+  END IF;
+
+	-- Identifica se há itens sem concilição de Envio na ITFAT_NF e recupera da origem ITREG_*
+  V_IDPRC:= '3';
+  P_DAC_AJUSTA_ITFAT_NF(tDadosApuracao,vMsgErro);
+  IF vMsgErro IS NOT NULL THEN
+    RAISE eERRO;
+  END IF;
+
+ 	-- Traduz o registro de glosas
+  V_IDPRC:= '5';
+  P_DAC_MANTEM_GLOSAS(tDadosApuracao,vMsgErro);
+  IF vMsgErro IS NOT NULL THEN
+    RAISE eERRO;
+  END IF;
+
+  P_DAC_VALIDA_APURACAO(0,tDadosApuracao);
+
+ 	-- Faz a conciliao dos itens retornados
+  V_IDPRC:= '6';
+  P_DAC_CONCILIA_ITEM(pIdMsgLoteEnvio,TRUE,vMsgErro);
+  IF vMsgErro IS NOT NULL THEN
+    RAISE eERRO;
+  END IF;
+
+  P_DAC_VALIDA_APURACAO(1,tDadosApuracao);
+
+ 	-- Executa apuração dos itens de envio com o retorno
+  V_IDPRC:= '7';
+  P_DAC_APURA_CONCILIADO2(tDadosApuracao,vMsgErro);
+  IF vMsgErro IS NOT NULL THEN
+    RAISE eERRO;
+  END IF;
+
+  RETURN TRUE;
+
+EXCEPTION
+   WHEN eERRO THEN
+     tDadosApuracao.MSG_ERRO:= 'DAC/Problemas na apuração ('||V_IDPRC||'): '||vMsgErro;
+     RETURN FALSE;
+
+  WHEN OTHERS THEN
+		tDadosApuracao.MSG_ERRO:= 'FNC_DAC_APURA_LOTE ('||V_IDPRC||'): '||SQLERRM;
+    RETURN FALSE;
+
+END FNC_DAC_APURA_LOTE;
+
+FUNCTION F_DAC_DIF_LIB(pnCdItFatNF IN NUMBER) RETURN NUMBER IS
+
+  CURSOR cRet(pCdItFatNf number) IS
+    SELECT id, id_it_envio,
+           To_Number(Nvl(vl_informado,'0'),'999999999.99') vl_informado,
+           To_Number(Nvl(vl_liberado,'0'),'999999999.99') vl_liberado,
+           To_Number(Nvl(vl_glosado,'0'),'99999999.99') vl_glosado
+      FROM dbamv.tiss_retorno_demon_conta_proc
+     WHERE id_it_envio in (select id_it_envio
+                             from dbamv.itfat_nota_fiscal it
+                            where it.cd_itfat_nf = pCdItFatNf);
+
+  CURSOR cItNfAgrup(pCdItFatNf number) IS
+    select count(id_it_envio) qt_linhas, min(cd_itfat_nf) cd_itfat_min, SUM(VL_ITFAT_NF) vl_agrupado
+      from dbamv.itfat_nota_fiscal itf
+     where itf.id_it_envio in (select id_it_envio
+                                 from dbamv.itfat_nota_fiscal it
+                                where it.cd_itfat_nf = pCdItFatNf);
+
+  CURSOR cItNf(pID number) IS
+    select id_it_envio, sum(vl_itfat_nf) vl_itfat_nf
+      from dbamv.itfat_nota_fiscal itf
+     WHERE itf.cd_itfat_nf = pID
+	 group by id_it_envio;
+
+  vResult NUMBER;
+  vRet          cRet%ROWTYPE;
+  vItNfAgrup    cItNfAgrup%ROWTYPE;
+  vItNf         cItNf%ROWTYPE;
+BEGIN
+
+  IF Nvl(nCdItFat, 0) = pnCdItFatNF AND Nvl(nUltimaGlosa, 0) > 0 THEN
+    RETURN nUltimaGlosa;
+  END IF;
+
+  nCdItFat := pnCdItFatNF;
+  vResult := 0;
+  nVlNFAgrup:= 0;
+
+  OPEN cRet(pnCdItFatNF);
+  FETCH cRet into vRet;
+  CLOSE cRet;
+
+  IF vRet.vl_glosado = 0 OR vRet.id_it_envio <> Nvl(nIdEnvio, 0) THEN
+    nIdEnvio := NULL;
+    nGlosaAgrup := NULL;
+  END IF;
+
+  IF vRet.vl_glosado > 0 THEN
+    OPEN cItNfAgrup(pnCdItFatNF);
+    FETCH cItNfAgrup INTO vItNfAgrup;
+    CLOSE cItNfAgrup;
+
+    IF Nvl(vItNfAgrup.qt_linhas, 0) > 1 THEN
+      OPEN cItNf(pnCdItFatNF);
+      FETCH cItNf INTO vItNf;
+      CLOSE cItNf;
+
+      -- sr/jack
+      nVlNFAgrup:= vItNf.VL_ITFAT_NF;
+
+      IF vItNf.id_it_envio <> Nvl(nIdEnvio, 0) THEN
+        nIdEnvio := vItNf.id_it_envio;
+        nGlosaAgrup := vRet.vl_glosado;
+      END IF;
+
+      IF Nvl(nGlosaAgrup, 0) > 0 THEN
+        IF Nvl(nGlosaAgrup, 0) <= vItNf.vl_itfat_nf THEN
+          vResult := nGlosaAgrup;
+          nGlosaAgrup := 0;
+        ELSE
+          vResult := vItNf.vl_itfat_nf;
+          nGlosaAgrup := nGlosaAgrup - vItNf.vl_itfat_nf;
+        END IF;
+      END IF;
+
+    END IF;
+  END IF;
+
+  nUltimaGlosa := vResult;
+  RETURN vResult;
+
+END F_DAC_DIF_LIB;
+
+
+PROCEDURE P_DAC_APURA_CONCILIADO2(tDadosApuracao IN OUT recDadosApuracao, pMSG_ERRO OUT VARCHAR2) IS
+
+  CURSOR cCONCILIADO2(P_ID_LOTE NUMBER, P_REMESSA IN NUMBER) IS
+           SELECT decode(TG.NM_XML,'guiaConsulta','CONSULTAS','GERAL') TIPO
+                 , CPROC.ID_IT_ENVIO
+                 , CPROC.ID ID_RETORNO_PROC
+				         , CGUIA.ID ID_RETORNO_GUIA
+                 , CPROC.CD_PRO_FAT
+                 , CGUIA.ID_GUIA_ENVIO
+                 , TO_NUMBER(Nvl(CPROC.VL_INFORMADO,0),'9999990.00') VL_INFORMADO
+			           , TO_NUMBER(NVL(CPROC.VL_PROCESSADO,'0'),'99999999999999.99') VL_PROCESSADO
+			           , TO_NUMBER(NVL(CPROC.VL_LIBERADO,'0'),'99999999999999.99') VL_LIBERADO
+                 , TO_NUMBER(Nvl(CPROC.VL_GLOSADO,0),'99999999999999.99') VL_GLOSADO
+                 , TO_NUMBER(NVL(CPROC.VL_LIBERADO,'0'),'99999999999999.99') + TO_NUMBER(Nvl(CPROC.VL_GLOSADO,0),'99999999999999.99') VL_DECLARADO
+                 , TO_NUMBER(NVL(CPROC.VL_LIBERADO,'0'),'99999999999999.99') + TO_NUMBER(Nvl(CPROC.VL_GLOSADO,0),'99999999999999.99')-TO_NUMBER(CPROC.VL_INFORMADO,'9999990.00') VL_ACRESCIMO
+                 , (SELECT SUM(VL_ITFAT_NF) FROM DBAMV.ITFAT_NOTA_FISCAL INF WHERE INF.ID_IT_ENVIO = CPROC.ID_IT_ENVIO) VL_ITFAT_NF_SUM
+                 , (SELECT Count(*) FROM DBAMV.ITFAT_NOTA_FISCAL INF WHERE INF.ID_IT_ENVIO = CPROC.ID_IT_ENVIO) QT_ITFAT_NF_ITEM
+                 , Decode(((TO_NUMBER(NVL(CPROC.VL_LIBERADO,'0'),'99999999999999.99') + TO_NUMBER(Nvl(CPROC.VL_GLOSADO,0),'99999999999999.99'))
+                   - TO_NUMBER(NVL(CPROC.VL_LIBERADO,'0'),'99999999999999.99') + TO_NUMBER(Nvl(CPROC.VL_GLOSADO,0),'99999999999999.99')-TO_NUMBER(CPROC.VL_INFORMADO,'9999990.00'))
+
+                   - (SELECT SUM(VL_ITFAT_NF) FROM DBAMV.ITFAT_NOTA_FISCAL INF WHERE INF.ID_IT_ENVIO = CPROC.ID_IT_ENVIO),0,'S','N') SN_ITFAT_NF
+					       , CPROC.DS_OBSERVACAO_IMPORTACAO
+			      FROM  DBAMV.TISS_RETORNO_DEMON_CONTA       CTA
+			          , DBAMV.TISS_RETORNO_DEMON_CONTA_LOTE 	CLOTE
+			          , DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA 	CGUIA
+			          , DBAMV.TISS_RETORNO_DEMON_CONTA_PROC 	CPROC
+			          , DBAMV.TISS_GUIA TG
+  		     WHERE CLOTE.ID    					= P_ID_LOTE
+			       AND CTA.ID					   	  = CLOTE.ID_PAI
+			       AND CGUIA.ID_PAI					= CLOTE.ID
+			       AND ( CGUIA.CD_STATUS_GUIA in ('6','4') -- Chegar STATUS
+			             OR (CGUIA.CD_STATUS_GUIA = '3' AND CGUIA.VL_GLOSA_GUIA = CGUIA.VL_INFORMADO_GUIA))
+             --
+             --AND CPROC.id in (1832355)
+			       AND NOT EXISTS (SELECT 'X'
+			                         FROM DBAMV.TISS_RETORNO_DEMON_CONTA_PROC DP1
+                                  , DBAMV.ITFAT_NOTA_FISCAL ITF2
+                                  , DBAMV.IT_RECEBIMENTO IR
+			                        WHERE DP1.ID_PAI       = CGUIA.ID
+			                          AND ITF2.CD_REMESSA  = P_REMESSA
+			                          AND ITF2.ID_IT_ENVIO = DP1.ID_IT_ENVIO
+			                          AND IR.CD_ITFAT_NF   = ITF2.CD_ITFAT_NF
+                                )
+  		       AND CPROC.ID_PAI  = CGUIA.ID
+			       AND TG.ID         =  CGUIA.ID_GUIA_ENVIO;
+
+  CURSOR cITFAT_NF(pID_IT_ENVIO NUMBER) IS
+    SELECT CD_ITFAT_NF
+         , CD_PRO_FAT
+         , QT_ITFAT_NF
+         , CD_ATENDIMENTO
+         , CD_REMESSA
+         , CD_REG_AMB
+         , CD_LANCAMENTO_AMB
+         , CD_REG_FAT
+         , CD_LANCAMENTO_FAT
+         , VL_ITFAT_NF
+      FROM DBAMV.ITFAT_NOTA_FISCAL INF
+     WHERE INF.ID_IT_ENVIO = pID_IT_ENVIO;
+
+  CURSOR cITFAT_NF_Consultas(pID_GUIA_ENVIO NUMBER) IS
+  --id_guia_envio => reg_amb => itreg_amb => ittfat_nf
+     SELECT inf.CD_ITFAT_NF
+          , inf.CD_PRO_FAT
+          , inf.QT_ITFAT_NF
+          , inf.CD_ATENDIMENTO
+          , inf.CD_REMESSA
+          , inf.CD_REG_AMB
+          , inf.CD_LANCAMENTO_AMB
+          , inf.VL_ITFAT_NF
+       FROM DBAMV.TISS_RETORNO_DEMON_CONTA_GUIA cguia
+           ,DBAMV.ITREG_AMB ita
+           ,DBAMV.ITFAT_NOTA_FISCAL inf
+      WHERE cguia.CD_REG_AMB = ita.CD_REG_AMB
+        AND inf.CD_REG_AMB = ita.CD_REG_AMB
+        AND inf.CD_LANCAMENTO_AMB = ita.CD_LANCAMENTO
+        AND cguia.ID_GUIA_ENVIO = pID_GUIA_ENVIO;
+
+
+  CURSOR cFinanRecebAgrupado(pCD_FINAN_RECEB NUMBER, pID_IT_ENVIO NUMBER) IS
+    SELECT MAX(CD_ITFAT_NF) CD_ITFAT_NF_MAX
+         , SUM(VL_LIBERADO) VL_LIBERADO_SUM
+         , SUM(VL_GLOSADO)   VL_GLOSA_SUM
+         , SUM(VL_ACRESCIMO) VL_ACRESCIMO_SUM
+      FROM DBAMV.FINAN_RECEB_ITEM FN
+     WHERE FN.CD_FINAN_RECEB = pCD_FINAN_RECEB
+       AND FN.CD_ITFAT_NF IN  (SELECT NF2.CD_ITFAT_NF
+                                 FROM DBAMV.ITFAT_NOTA_FISCAL NF2
+                                WHERE NF2.ID_IT_ENVIO = pID_IT_ENVIO);
+
+  rFinanRecebAgrupado cFinanRecebAgrupado%ROWTYPE;
+
+  nSeqDRL           NUMBER;
+  nSeqIDRL          NUMBER;
+
+  nVL_INFORMADO    NUMBER:= 0;
+  nVL_PROCESSADO   NUMBER:= 0;
+  nAPURADOMV       NUMBER:= 0;
+
+  nVL_GLOSA_ITEM    NUMBER:= 0;
+  nVL_ACRESC_ITEM   NUMBER:= 0;
+  nVL_LIBERADO_ITEM NUMBER:= 0;
+  nVL_INVALIDO_ITEM NUMBER:= 0;
+
+  tFinanReceb       tpFinanReceb;
+  tFinanRecebItem   tpFinanRecebItem;
+  vMSG_ERRO         VARCHAR2(2000);
+  eSAIDA            EXCEPTION;
+  primeiroItemNF    BOOLEAN:= FALSE;
+  bHaApuracao       BOOLEAN:= FALSE;
+
+
+BEGIN
+Dbms_Output.Put_Line('------------------------------------------------------------------------------------------------------------------------------------------------- >');
+  OPEN C_LOTE_ENVIO(tDadosApuracao.ID_MSG_ORIGEM);
+  FETCH C_LOTE_ENVIO INTO R_LOTE_ENVIO;
+  CLOSE C_LOTE_ENVIO;
+
+  tDadosApuracao.CD_REMESSA_GLOSA:= R_LOTE_ENVIO.CD_REMESSA_GLOSA;
+
+  OPEN C_CON_REC(tDadosApuracao.CD_NOTA_FISCAL);
+  FETCH C_CON_REC INTO R_CON_REC;
+  CLOSE C_CON_REC;
+
+  tFinanReceb.CD_CON_REC := R_CON_REC.CD_CON_REC;
+  tFinanReceb.CD_ITCON_REC := R_CON_REC.CD_ITCON_REC;
+  tFinanReceb.CD_FINAN_RECEB := NULL;
+  --
+  tDadosApuracao.VL_INFORMADO := 0;
+  tDadosApuracao.VL_LIBERADO := 0;
+  tDadosApuracao.VL_GLOSADO  := 0;
+  tDadosApuracao.VL_ACRESCIMO:= 0;
+  tDadosApuracao.VL_INVALIDO:= 0;
+
+  tFinanReceb.CD_FINAN_RECEB := NULL;
+  nSeqDRL := F_DAC_DADOS_FINAN_RECEB(tFinanReceb,tDadosApuracao);
+
+Dbms_Output.Put_Line(tDadosApuracao.ID_DLT||' <> '||tDadosApuracao.CD_REMESSA);
+  FOR rCONCILIADO IN cCONCILIADO2(tDadosApuracao.ID_DLT,tDadosApuracao.CD_REMESSA) LOOP
+
+    nVL_ACRESC_ITEM:= 0;
+    nVL_LIBERADO_ITEM:= 0;
+    nVL_GLOSA_ITEM:=0;
+    nVL_INVALIDO_ITEM:=0;
+    tFinanRecebItem := NULL;
+    primeiroItemNF:= TRUE;
+    bHaApuracao:= TRUE;
+ Dbms_Output.Put_Line('ID_IT_ENVIO >'||rCONCILIADO.ID_IT_ENVIO||' <  TIPO> '||rCONCILIADO.TIPO);
+    IF rCONCILIADO.ID_IT_ENVIO IS NOT NULL OR rCONCILIADO.TIPO = 'CONSULTAS'  THEN
+      --
+      tFinanRecebItem.CD_FINAN_RECEB      := nSeqDRL;
+      tFinanRecebItem.CD_ORIGEM_ITEM      := rCONCILIADO.ID_RETORNO_PROC;
+      tFinanRecebItem.CD_ORIGEM           := rCONCILIADO.ID_RETORNO_GUIA;
+      tFinanRecebItem.CD_REMESSA          := tDadosApuracao.CD_REMESSA;
+      tFinanRecebItem.CD_PROCEDIMENTO     := rCONCILIADO.CD_PRO_FAT;
+      tFinanRecebItem.CD_MOTIVO_1         := TO_NUMBER(F_DADO_GLOSA(rCONCILIADO.ID_RETORNO_PROC, 1, 'CODIGO_MV'));
+      tFinanRecebItem.CD_MOTIVO_2         := TO_NUMBER(F_DADO_GLOSA(rCONCILIADO.ID_RETORNO_PROC, 2, 'CODIGO_MV'));
+      tFinanRecebItem.CD_MOTIVO_3         := TO_NUMBER(F_DADO_GLOSA(rCONCILIADO.ID_RETORNO_PROC, 3, 'CODIGO_MV'));
+      tFinanRecebItem.DS_FALHA            := rCONCILIADO.DS_OBSERVACAO_IMPORTACAO;
+
+
+      -- Cálculo BASE para nova apuração (Liberado, Glosa e Acréscimo), sem ----
+      -- Rateio na NF.
+      nVL_LIBERADO_ITEM := rCONCILIADO.VL_LIBERADO;
+      --
+  	  nVL_GLOSA_ITEM :=	rCONCILIADO.VL_GLOSADO;
+
+
+      -- Remove o acréscimo dos itens
+      /*
+	  IF rCONCILIADO.VL_GLOSADO = 0 THEN
+        nVL_LIBERADO_ITEM:= nVL_LIBERADO_ITEM - nVL_ACRESC_ITEM;
+
+      ELSIF rCONCILIADO.VL_GLOSADO > 0 THEN
+    	  nVL_GLOSA_ITEM:= nVL_GLOSA_ITEM - nVL_ACRESC_ITEM;
+
+      END IF;
+	  */
+      IF rCONCILIADO.VL_DECLARADO > rCONCILIADO.VL_INFORMADO THEN
+        nVL_ACRESC_ITEM:= rCONCILIADO.VL_DECLARADO - rCONCILIADO.VL_INFORMADO;
+      END IF;
+      --------------------------------------------------------------------------
+
+      --
+      IF rCONCILIADO.QT_ITFAT_NF_ITEM = 0 THEN
+        Dbms_Output.Put_Line('Não foi encontrando uma relação na ITFAT_NOTA_FISCAL com ID_IT_ENVIO: '||rCONCILIADO.ID_IT_ENVIO);
+      END IF;
+
+      -- Rateio pela ITFAT_NOTA_FISCAL
+      -- Como fica Guia de Consultas?
+
+      -- seCons
+      IF rCONCILIADO.TIPO = 'CONSULTAS'  THEN
+
+          FOR rITFAT_NF IN cITFAT_NF_Consultas(rCONCILIADO.ID_GUIA_ENVIO) LOOP
+            --id_guia_envio => reg_amb => itreg_amb => ittfat_nf
+            tFinanRecebItem.cd_reg_amb := rITFAT_NF.cd_reg_amb;
+            tFinanRecebItem.cd_lancamento_amb := rITFAT_NF.cd_lancamento_amb;
+            -- Inicia o cálculo por item da NF
+            tFinanRecebItem.VL_LIBERADO:= nVL_LIBERADO_ITEM;
+            tFinanRecebItem.VL_GLOSA:= nVL_GLOSA_ITEM;
+            tFinanRecebItem.VL_ACRESCIMO:= nVL_ACRESC_ITEM;
+
+            nSeqIDRL := F_ITENS_RETORNO_LOTE_TISS(tFinanRecebItem);
+
+          END LOOP;
+      ELSE
+        FOR rITFAT_NF IN cITFAT_NF(rCONCILIADO.ID_IT_ENVIO) LOOP
+
+          -- Inicia o cálculo por item da NF
+          tFinanRecebItem.VL_LIBERADO:= 0;
+          tFinanRecebItem.VL_GLOSA:= 0;
+          tFinanRecebItem.VL_ACRESCIMO:= 0;
+
+          -- Item da nota fiscal em evidência
+          tFinanRecebItem.CD_ITFAT_NF         := rITFAT_NF.CD_ITFAT_NF;
+
+          IF primeiroItemNF AND nVL_ACRESC_ITEM > 0 THEN
+            primeiroItemNF:= FALSE;
+            tFinanRecebItem.VL_ACRESCIMO        := nVL_ACRESC_ITEM;    -- ACRÉSCIMO apenas no primeiro
+          END IF;
+
+          -- Se o declarado estiver de acordo com o VL_ITFAT_NF (então não consta acréscimo).
+          --IF rCONCILIADO.SN_ITFAT_NF = 'S' OR rCONCILIADO.QT_ITFAT_NF_ITEM = 1 THEN
+          IF rCONCILIADO.SN_ITFAT_NF = 'S' AND rCONCILIADO.QT_ITFAT_NF_ITEM = 1 THEN --SAULO
+            --IF nVL_LIBERADO_ITEM > 0 THEN
+              tFinanRecebItem.VL_LIBERADO := nVL_LIBERADO_ITEM;
+            --ELSE
+              tFinanRecebItem.VL_GLOSA    := nVL_GLOSA_ITEM;
+            --END IF;
+
+          ELSE
+            --Fazer rateio
+            IF nVL_LIBERADO_ITEM > 0 AND nVL_GLOSA_ITEM = 0 THEN
+              Dbms_Output.Put_Line(rITFAT_NF.CD_ITFAT_NF||' Preserva NF nVL_LIBERADO_ITEM');
+              tFinanRecebItem.VL_LIBERADO       := rITFAT_NF.VL_ITFAT_NF;
+            ELSIF nVL_LIBERADO_ITEM > 0 THEN
+              Dbms_Output.Put_Line(rITFAT_NF.CD_ITFAT_NF||' Fez rateio nVL_LIBERADO_ITEM');
+              tFinanRecebItem.VL_LIBERADO       := Round(nVL_LIBERADO_ITEM/rCONCILIADO.QT_ITFAT_NF_ITEM,2);
+            ELSE
+              tFinanRecebItem.VL_LIBERADO       := nVL_LIBERADO_ITEM;
+            END IF;
+
+            IF nVL_GLOSA_ITEM > 0 AND nVL_LIBERADO_ITEM = 0 THEN
+              Dbms_Output.Put_Line(rITFAT_NF.CD_ITFAT_NF||' Preserva NF nVL_GLOSA_ITEM');
+              tFinanRecebItem.VL_GLOSA            := rITFAT_NF.VL_ITFAT_NF;
+            ELSIF nVL_GLOSA_ITEM > 0 THEN
+              Dbms_Output.Put_Line(rITFAT_NF.CD_ITFAT_NF||' Fez rateio nVL_GLOSA_ITEM');
+              tFinanRecebItem.VL_GLOSA            := Round(nVL_GLOSA_ITEM/rCONCILIADO.QT_ITFAT_NF_ITEM,2);
+            ELSE
+              tFinanRecebItem.VL_GLOSA            := nVL_GLOSA_ITEM;
+            END IF;
+          END IF;
+
+		  tFinanRecebItem.VL_INFORMADO := rCONCILIADO.VL_INFORMADO;
+          -- Registra o item
+
+      Dbms_Output.Put_Line('-----------------------------------------------------------------cd_reg_fat >'||rITFAT_NF.cd_reg_fat||' <  cd_lancamento_fat> '||rITFAT_NF.cd_lancamento_fat);
+		  tFinanRecebItem.cd_reg_fat := rITFAT_NF.cd_reg_fat;
+          tFinanRecebItem.cd_lancamento_fat := rITFAT_NF.cd_lancamento_fat;
+          tFinanRecebItem.cd_reg_amb := rITFAT_NF.cd_reg_amb;
+          tFinanRecebItem.cd_lancamento_amb := rITFAT_NF.cd_lancamento_amb;
+          nSeqIDRL := F_ITENS_RETORNO_LOTE_TISS(tFinanRecebItem);
+
+        END LOOP; -- cITFAT_NF
+      END IF ;
+      -- Corrigir rateio do item aqui (na FINAN_RECEB_ITEM)
+      -- F_DIF_LIB(tFinanRecebItem.CD_ITFAT_NF,rCONCILIADO.ID_IT_ENVIO)
+      -- tFinanRecebItem.CD_ITFAT_NF Considerar este para desconto
+      -- rCONCILIADO.ID_IT_ENVIO Considerar para somatório
+      -- IMPORTANTE: Acréscimo sempre no primeiro item, decréscimo sempre no último. O rateio
+      -- do liberado pode gerar inconsistência na divisão, então retirar diferença no último. O
+      -- mesmo para glosa.
+
+      OPEN cFinanRecebAgrupado (nSeqDRL,rCONCILIADO.ID_IT_ENVIO);
+        FETCH cFinanRecebAgrupado INTO rFinanRecebAgrupado;
+      CLOSE cFinanRecebAgrupado;
+
+
+Dbms_Output.Put_Line('IF.1 '||tFinanRecebItem.CD_ITFAT_NF||' '||rFinanRecebAgrupado.VL_LIBERADO_SUM||' + '||rFinanRecebAgrupado.VL_GLOSA_SUM||' > '||rCONCILIADO.VL_ITFAT_NF_SUM||' nVL_GLOSA_ITEM: '||nVL_GLOSA_ITEM);
+Dbms_Output.Put_Line('IF.2 '||rFinanRecebAgrupado.VL_GLOSA_SUM||' <> '||nVL_GLOSA_ITEM);
+    IF (rFinanRecebAgrupado.VL_LIBERADO_SUM + rFinanRecebAgrupado.VL_GLOSA_SUM) > rCONCILIADO.VL_ITFAT_NF_SUM THEN
+Dbms_Output.Put_Line('Entrou no IF.1');
+         IF rFinanRecebAgrupado.VL_LIBERADO_SUM >= rCONCILIADO.VL_ITFAT_NF_SUM  THEN
+          UPDATE DBAMV.FINAN_RECEB_ITEM
+              SET VL_LIBERADO = VL_LIBERADO - (rFinanRecebAgrupado.VL_LIBERADO_SUM +  rFinanRecebAgrupado.VL_GLOSA_SUM - rCONCILIADO.VL_ITFAT_NF_SUM)
+            WHERE CD_ITFAT_NF = rFinanRecebAgrupado.CD_ITFAT_NF_MAX
+              AND CD_FINAN_RECEB = nSeqDRL;
+Dbms_Output.Put_Line('*** 1.CONFERIR: VL_LIBERADO(CD_ITFAT_NF_MAX): '||rFinanRecebAgrupado.CD_ITFAT_NF_MAX);
+
+        ELSIF rFinanRecebAgrupado.VL_GLOSA_SUM > 0 THEN
+          UPDATE DBAMV.FINAN_RECEB_ITEM
+             SET VL_GLOSADO = VL_GLOSADO - (rFinanRecebAgrupado.VL_LIBERADO_SUM +  rFinanRecebAgrupado.VL_GLOSA_SUM - rCONCILIADO.VL_ITFAT_NF_SUM)
+           WHERE CD_ITFAT_NF = rFinanRecebAgrupado.CD_ITFAT_NF_MAX
+             AND VL_GLOSADO >= (rFinanRecebAgrupado.VL_LIBERADO_SUM +rFinanRecebAgrupado.VL_GLOSA_SUM - rCONCILIADO.VL_ITFAT_NF_SUM)
+             AND CD_FINAN_RECEB = nSeqDRL;
+
+Dbms_Output.Put_Line('*** 1.CONFERIR: VL_GLOSADO(CD_ITFAT_NF_MAX): '||rFinanRecebAgrupado.CD_ITFAT_NF_MAX);
+
+          END IF;
+
+      END IF;
+
+      OPEN cFinanRecebAgrupado (nSeqDRL,rCONCILIADO.ID_IT_ENVIO);
+        FETCH cFinanRecebAgrupado INTO rFinanRecebAgrupado;
+      CLOSE cFinanRecebAgrupado;
+
+      IF (rFinanRecebAgrupado.VL_GLOSA_SUM <> nVL_GLOSA_ITEM) OR (rFinanRecebAgrupado.VL_LIBERADO_SUM <> nVL_LIBERADO_ITEM) THEN
+Dbms_Output.Put_Line('Entrou no IF.2');
+        IF rFinanRecebAgrupado.VL_GLOSA_SUM > nVL_GLOSA_ITEM THEN
+Dbms_Output.Put_Line('Entrou no ajuste 2.');
+          UPDATE DBAMV.FINAN_RECEB_ITEM
+             SET VL_LIBERADO = VL_LIBERADO - (rFinanRecebAgrupado.VL_LIBERADO_SUM - nVL_LIBERADO_ITEM)
+               , VL_GLOSADO = VL_GLOSADO   - (rFinanRecebAgrupado.VL_GLOSA_SUM - nVL_GLOSA_ITEM)
+           WHERE CD_ITFAT_NF = rFinanRecebAgrupado.CD_ITFAT_NF_MAX
+             AND CD_FINAN_RECEB = nSeqDRL;
+Dbms_Output.Put_Line('*** 2.1.CONFERIR: VL_GLOSADO(CD_ITFAT_NF_MAX): '||rFinanRecebAgrupado.CD_ITFAT_NF_MAX);
+        ELSIF rFinanRecebAgrupado.VL_GLOSA_SUM < nVL_GLOSA_ITEM THEN
+          UPDATE DBAMV.FINAN_RECEB_ITEM
+             SET VL_LIBERADO = VL_LIBERADO + (nVL_LIBERADO_ITEM - rFinanRecebAgrupado.VL_LIBERADO_SUM)
+               , VL_GLOSADO = VL_GLOSADO + (nVL_GLOSA_ITEM - rFinanRecebAgrupado.VL_GLOSA_SUM)
+           WHERE CD_ITFAT_NF = rFinanRecebAgrupado.CD_ITFAT_NF_MAX
+             AND CD_FINAN_RECEB = nSeqDRL;
+Dbms_Output.Put_Line('*** 2.2.CONFERIR: VL_GLOSADO(CD_ITFAT_NF_MAX): '||rFinanRecebAgrupado.CD_ITFAT_NF_MAX);
+        END IF;
+      -- checar liberado
+      END IF;
+		ELSE -- ID_IT_ENVIO is null
+      --
+      -- Registra a FALHA do item
+	    nVL_INVALIDO_ITEM:= rCONCILIADO.VL_INFORMADO;
+      tDadosApuracao.VL_INVALIDO:= Nvl(tDadosApuracao.VL_INVALIDO,0) + nVL_INVALIDO_ITEM;
+      --
+      nSeqIDRL := F_ITENS_RETORNO_LOTE_TISS(tFinanRecebItem);
+      --
+		END IF;
+
+	END LOOP; -- cCONCILIADOS
+
+
+  tFinanReceb.CD_FINAN_RECEB := nSeqDRL;
+  tFinanReceb.CD_NOTA_FISCAL := tDadosApuracao.CD_NOTA_FISCAL;
+  tFinanReceb.VL_INVALIDO    := tDadosApuracao.VL_INVALIDO;
+  --
+  -- Soma acrscimo com o vl_liberado para resultar no valor pago.
+  --
+	UPDATE DBAMV.FINAN_RECEB_ITEM
+	SET VL_LIBERADO = VL_LIBERADO + VL_ACRESCIMO
+	WHERE CD_FINAN_RECEB = nSeqDRL
+	AND VL_LIBERADO > 0 AND VL_ACRESCIMO > 0;
+  --
+
+  nSeqDRL := F_DAC_DADOS_FINAN_RECEB(tFinanReceb,tDadosApuracao);
+
+  IF NOT(bHaApuracao) THEN
+    vMSG_ERRO:= 'Nada foi apurado! Verifique se o lote já foi baixado no financeiro.';
+    RAISE eSAIDA;
+  END IF;
+
+  nAPURADOMV:= tDadosApuracao.VL_LIBERADO + tDadosApuracao.VL_GLOSADO + tDadosApuracao.VL_INVALIDO;
+
+  IF nAPURADOMV = 0 THEN
+    vMSG_ERRO:= 'Nada foi apurado! Importação para o financeiro não foi realizada.';
+    RAISE eSAIDA;
+  END IF;
+
+  Dbms_Output.Put_Line('FINAN_RECEB=> '||nSeqDRL );
+
+
+EXCEPTION
+  WHEN eSAIDA THEN
+    pMSG_ERRO:= vMSG_ERRO;
+
+  WHEN OTHERS THEN
+    pMSG_ERRO:= 'P_DAC_APURA_CONCILIADO/FINAN_RECEB( '||nSeqDRL||'):  '||SQLERRM;
+
+END P_DAC_APURA_CONCILIADO2;
+
+
+END pkg_ffcv_retorno_tiss;
+/
+
+GRANT EXECUTE ON dbamv.pkg_ffcv_retorno_tiss TO biconexao;
+GRANT EXECUTE ON dbamv.pkg_ffcv_retorno_tiss TO dbadw;
+GRANT EXECUTE ON dbamv.pkg_ffcv_retorno_tiss TO dbaportal;
+GRANT EXECUTE ON dbamv.pkg_ffcv_retorno_tiss TO dbaps;
+GRANT EXECUTE ON dbamv.pkg_ffcv_retorno_tiss TO dbasgu;
+GRANT EXECUTE ON dbamv.pkg_ffcv_retorno_tiss TO mv2000;
+GRANT EXECUTE ON dbamv.pkg_ffcv_retorno_tiss TO mvintegra;
+GRANT EXECUTE ON dbamv.pkg_ffcv_retorno_tiss TO ro_acsc_dbamv_exe_pack;

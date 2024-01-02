@@ -1,0 +1,134 @@
+CREATE OR REPLACE VIEW DBAMV.V_AUDITORIA_ITENS_FFCV AS
+SELECT
+        'A' tipo_auditoria,
+        dbamv.fnc_ffcv_ret_tipo_auditoria(
+            nvl(
+                ac.cd_reg_fat,
+                ac.cd_reg_amb
+            ),
+            ac.cd_atendimento,
+            nvl(
+                ac.cd_lancamento_fat,
+                ac.cd_lancamento_amb
+            ),
+            DECODE(
+                ac.cd_reg_amb,
+                NULL,
+                'H',
+                'A'
+            )
+        ) acao,
+        cd_auditoria_conta,
+        ac.dt_auditoria,
+        ac.cd_motivo_auditoria,
+        ac.cd_mvto,
+        ac.tp_mvto,
+        ac.cd_usuario_aud,
+        ac.cd_reg_fat,
+        ac.cd_lancamento_fat,
+        ac.cd_reg_amb,
+        ac.cd_lancamento_amb,
+        ac.cd_atendimento,
+        ac.cd_convenio,
+        ac.cd_con_pla,
+        ac.cd_gru_fat,
+        ac.cd_pro_fat,
+        ac.dt_lancamento,
+        ac.hr_lancamento,
+        ac.qt_lancamento_ant,
+        ac.qt_lancamento,
+        ac.cd_setor,
+        ac.cd_prestador,
+        ac.vl_total_conta,
+        ac.vl_total_conta_ant,
+        ac.vl_percentual_multipla,
+        ac.vl_percentual_multipla_ant,
+        ac.cd_usuario_cancelou,
+        ac.dt_cancelou,
+        ac.sn_pertence_pacote,
+        ac.sn_horario_especial,
+        ac.cd_ati_med,
+        ac.tp_pagamento,
+        ac.cd_setor_produziu,
+        ac.vl_unitario,
+        ac.vl_unitario_ant,
+        ac.vl_acrescimo,
+        ac.vl_acrescimo_ant,
+        ac.vl_desconto,
+        ac.vl_desconto_ant,
+        ac.sn_horario_especial_ant
+    FROM
+        dbamv.auditoria_conta ac,
+        dbamv.motivo_auditoria ma
+    WHERE
+            'S' = dbamv.fnc_ffcv_ret_auditoria(
+                nvl(
+                    ac.cd_reg_fat,
+                    ac.cd_reg_amb
+                ),
+                ac.cd_atendimento,
+                nvl(
+                    ac.cd_lancamento_fat,
+                    ac.cd_lancamento_amb
+                ),
+                DECODE(
+                    ac.cd_reg_amb,
+                    NULL,
+                    'H',
+                    'A'
+                )
+            )
+        AND
+            ac.cd_motivo_auditoria = ma.cd_motivo_auditoria
+        AND
+            ma.tp_motivo_auditoria = 'A'
+    UNION ALL
+    SELECT
+        'O' tipo_auditoria,
+        tp_acao,
+        cd_auditoria_conta,
+        dt_auditoria,
+        cd_motivo_auditoria,
+        cd_mvto,
+        tp_mvto,
+        cd_usuario_aud,
+        cd_reg_fat,
+        cd_lancamento_fat,
+        cd_reg_amb,
+        cd_lancamento_amb,
+        cd_atendimento,
+        cd_convenio,
+        cd_con_pla,
+        cd_gru_fat,
+        cd_pro_fat,
+        dt_lancamento,
+        hr_lancamento,
+        qt_lancamento_ant,
+        qt_lancamento,
+        cd_setor,
+        cd_prestador,
+        vl_total_conta,
+        vl_total_conta_ant,
+        vl_percentual_multipla,
+        vl_percentual_multipla_ant,
+        cd_usuario_cancelou,
+        dt_cancelou,
+        sn_pertence_pacote,
+        sn_horario_especial,
+        cd_ati_med,
+        tp_pagamento,
+        cd_setor_produziu,
+        vl_unitario,
+        vl_unitario_ant,
+        vl_acrescimo,
+        vl_acrescimo_ant,
+        vl_desconto,
+        vl_desconto_ant,
+        sn_horario_especial_ant
+    FROM
+        dbamv.auditoria_conta_ope
+    ORDER BY
+        cd_atendimento,
+        dt_auditoria,
+        tipo_auditoria,
+        acao;

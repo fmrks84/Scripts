@@ -1,0 +1,35 @@
+select
+pr.cd_prestador                                          PRESTADOR,
+pr.ds_codigo_conselho                                    CRM,
+pr.nr_cpf_cgc                                            CPF,
+pr.nm_prestador                                          NOME,
+mm_dev_com(pr.cd_prestador,1)                            FONE_COMERCIAL,
+mm_dev_com(pr.cd_prestador,4)                            FONE_FAX,
+mm_dev_com(pr.cd_prestador,3)                            FONE_CELULAR,
+mm_dev_com(pr.cd_prestador,2)                            FONE_RESIDENCIAL,
+to_char(pr.dt_nascimento,'dd/mm/yyyy')                   DATA_NASCIMENTO,
+pr.ds_cep_comercial                                      CEP_COMERCIAL,
+loc.ds_tipo_logradouro                                   LOGRADOURO_COMERCIAL,
+pr.ds_endereco_comercial                                 ENDERECO_COMERCIAL,
+pr.nr_endereco_comercial                                 NUMERO_COMERCIAL,
+pr.ds_complemento_comercial                              COMPLEMENTO_COMERCIAL,
+pr.ds_bairro_comercial                                   BAIRRO_COMERCIAL,
+cic.nm_cidade                                            CIDADE_COMERCIAL,
+cic.cd_uf                                                ESTADO_COMERCIAL,
+pr.nr_cep                                                CEP_RESIDENCIAL,
+lor.ds_tipo_logradouro                                   LOGRADOURO_RESIDENCIAL,
+pr.ds_endereco                                           ENDERECO_RESIDENCIAL,
+pr.nr_endereco                                           NUMERO_RESIDENCIAL,
+pr.ds_complemento                                        COMPLEMENTO_RESIDENCIAL,
+pr.ds_bairro                                             BAIRRO_RESIDENCIAL,
+cir.nm_cidade                                            CIDADE_RESIDENCIAL,
+cir.cd_uf                                                ESTADO_RESIDENCIAL
+from
+prestador pr,cidade cic,cidade cir,tipo_logradouro loc,tipo_logradouro lor
+where
+cic.cd_cidade(+) = pr.cd_cidade_comercial and
+loc.cd_tipo_logradouro(+) = pr.cd_tipo_logradouro_comercial
+AND cir.cd_cidade(+) = pr.cd_cidade and lor.cd_tipo_logradouro(+) = pr.cd_tipo_logradouro
+and pr.cd_tip_presta in (8,83,84) and
+pr.tp_situacao = 'A'
+order by pr.nm_prestador

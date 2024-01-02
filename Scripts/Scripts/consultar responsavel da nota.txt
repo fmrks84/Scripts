@@ -1,0 +1,197 @@
+SELECT REG_fat.Cd_Multi_Empresa,
+       REG_FAT.CD_CONVENIO,
+       FNC_HMSJ_CONVENIO(REG_FAT.CD_CONVENIO) NM_CONVENIO,
+       ATENDIME.DT_ATENDIMENTO,
+       PACIENTE.CD_PACIENTE,
+       ATENDIME.CD_ATENDIMENTO,
+       PACIENTE.NM_PACIENTE,       
+       PACIENTE.NR_CPF,
+       FNC_HMSJ_RETORNA_RESPONS(ATENDIME.CD_ATENDIMENTO) RESPONSAVEL_ATEND,
+       NF.NM_CLIENTE RESPONSAVEL_NF,
+       NF.NR_CGC_CPF CPF_NF,
+       ATENDIME.HR_ALTA,
+       'HOSPITALAR' TIPO_CONTA,
+       REG_FAT.CD_REG_FAT NR_CONTA,
+       remessa.cd_remessa,
+       FATURA.DT_COMPETENCIA,
+       NF.nr_id_nota_fiscal NOTA_FISCAL_RPS,
+       NF.dt_emissao DT_EMISSAO_RPS,
+       DECODE(NF.CD_STATUS, 'C', 'CANCELADO', 'E', 'ENVIADO', '') STATUS_RPS,
+       NF.nr_nota_fiscal_nfe NOTA_FISCAL_NFE,
+       NF.Hr_Emissao_Nfe DT_EMISSAO_NFE, 
+       DECODE(NF.VER_NFE, 'PD', 'Pendente de envio', 'EN', 'Enviada', 'RE', 'Reenviada', 'FN', 'Finalizada(NFE gerada)', 'CA', 'Solicitar cancelamento da NFE', 'EC', 'Solicitacao de cancelamento enviada', 'RC', 'Reenvio do cancelamento', 'CC', 'NFe cancelada', 'CR', 'RPS cancelado sem ter gerado NFE', 'NI', 'Numeracao Inutilizada', 'RE', 'RPS processado com erro na prefeitura') STATUS_NFE,
+       REG_FAT.VL_TOTAL_CONTA,
+       NF.VL_TOTAL_NOTA VL_TOTAL_NOTA_FISCAL,
+       NF.CD_NOTA_FISCAL,
+       RR.VL_DESCONTO,
+       RR.VL_ACRESCIMO,
+       RR.VL_RECEBIDO,
+       RR.DT_RECEBIMENTO
+--     RR.DT_BAIXA
+       
+
+  FROM DBAMV.ATENDIME          ATENDIME,
+       DBAMV.PACIENTE          PACIENTE,
+       DBAMV.REG_FAT           REG_FAT,
+       DBAMV.REMESSA_FATURA    REMESSA,
+       DBAMV.FATURA            FATURA,
+       DBAMV.CONVENIO,
+       DBAMV.NOTA_FISCAL       NF,
+       DBAMV.ITFAT_NOTA_FISCAL ITFAT,
+       DBAMV.CON_REC           CR,
+       DBAMV.ITCON_REC         IR,
+       DBAMV.RECCON_REC        RR
+
+ WHERE 1 = 1
+      
+   AND REG_FAT.CD_CONVENIO = CONVENIO.CD_CONVENIO
+   AND CONVENIO.TP_CONVENIO = 'P'
+   AND REG_FAT.CD_MULTI_EMPRESA IN (1, 2)
+   AND REG_FAT.CD_REMESSA  = REMESSA.CD_REMESSA(+)
+   AND REMESSA.CD_FATURA   = FATURA.CD_FATURA(+)
+
+   AND REG_FAT.CD_ATENDIMENTO = ATENDIME.CD_ATENDIMENTO
+   AND ATENDIME.TP_ATENDIMENTO = 'I'
+   AND ATENDIME.CD_PACIENTE = PACIENTE.CD_PACIENTE   
+        
+   AND REG_FAT.CD_REG_FAT = ITFAT.CD_REG_FAT(+)
+   AND ITFAT.CD_NOTA_FISCAL = NF.CD_NOTA_FISCAL(+)
+   AND NF.NR_ID_NOTA_FISCAL IS NOT NULL -- CONTAS COM NOTAS FISCAIS
+      
+   AND NF.CD_NOTA_FISCAL = CR.CD_NOTA_FISCAL (+)
+   AND CR.CD_CON_REC = IR.CD_CON_REC(+)
+   AND IR.CD_ITCON_REC = RR.CD_ITCON_REC(+)
+ --  AND RR.DT_RECEBIMENTO BETWEEN TO_DATE('01/01/2017', 'DD/MM/YYYY') AND TO_DATE('31/12/2017', 'DD/MM/YYYY')
+   AND ATENDIME.CD_ATENDIMENTO = 1709718 -- AMOSTRA
+-- AND NF.CD_NOTA_FISCAL IN (286870,287167,291656,289647) -- AMOSTRA
+
+ GROUP BY REG_fat.Cd_Multi_Empresa,
+       REG_FAT.CD_CONVENIO,
+       FNC_HMSJ_CONVENIO(REG_FAT.CD_CONVENIO),
+       ATENDIME.DT_ATENDIMENTO,
+       PACIENTE.CD_PACIENTE,
+       ATENDIME.CD_ATENDIMENTO,
+       PACIENTE.NM_PACIENTE,       
+       PACIENTE.NR_CPF,
+       FNC_HMSJ_RETORNA_RESPONS(ATENDIME.CD_ATENDIMENTO),
+       NF.NM_CLIENTE,
+       NF.NR_CGC_CPF,
+       ATENDIME.HR_ALTA,
+       REG_FAT.CD_REG_FAT,
+       remessa.cd_remessa,
+       FATURA.DT_COMPETENCIA,
+       NF.nr_id_nota_fiscal,
+       NF.dt_emissao,
+       DECODE(NF.CD_STATUS, 'C', 'CANCELADO', 'E', 'ENVIADO', ''),
+       NF.nr_nota_fiscal_nfe,
+       NF.Hr_Emissao_Nfe, 
+       DECODE(NF.VER_NFE, 'PD', 'Pendente de envio', 'EN', 'Enviada', 'RE', 'Reenviada', 'FN', 'Finalizada(NFE gerada)', 'CA', 'Solicitar cancelamento da NFE', 'EC', 'Solicitacao de cancelamento enviada', 'RC', 'Reenvio do cancelamento', 'CC', 'NFe cancelada', 'CR', 'RPS cancelado sem ter gerado NFE', 'NI', 'Numeracao Inutilizada', 'RE', 'RPS processado com erro na prefeitura'),
+       REG_FAT.VL_TOTAL_CONTA,
+       NF.VL_TOTAL_NOTA,
+       NF.CD_NOTA_FISCAL,
+       RR.VL_DESCONTO,
+       RR.VL_ACRESCIMO,
+       RR.VL_RECEBIDO,
+       RR.DT_RECEBIMENTO
+--     RR.DT_BAIXA       
+       
+------------------------------------
+UNION ALL
+------------------------------------
+
+SELECT REG_AMB.Cd_Multi_Empresa,
+       REG_AMB.CD_CONVENIO,
+       FNC_HMSJ_CONVENIO(REG_AMB.CD_CONVENIO) NM_CONVENIO,
+       ATENDIME.DT_ATENDIMENTO,
+       PACIENTE.CD_PACIENTE,
+       ATENDIME.CD_ATENDIMENTO,
+       PACIENTE.NM_PACIENTE,       
+       PACIENTE.NR_CPF,
+       FNC_HMSJ_RETORNA_RESPONS(ATENDIME.CD_ATENDIMENTO) RESPONSAVEL_ATEND,
+       NF.NM_CLIENTE RESPONSAVEL_NF,
+       NF.NR_CGC_CPF CPF_NF,
+       ATENDIME.HR_ALTA,
+       'AMBULATORIO' TIPO_CONTA,
+       REG_AMB.CD_REG_AMB NR_CONTA,
+       remessa.cd_remessa,
+       FATURA.DT_COMPETENCIA,
+       NF.nr_id_nota_fiscal NOTA_FISCAL_RPS,
+       NF.dt_emissao DT_EMISSAO_RPS,
+       DECODE(NF.CD_STATUS, 'C', 'CANCELADO', 'E', 'ENVIADO', '') STATUS_RPS,
+       NF.nr_nota_fiscal_nfe NOTA_FISCAL_NFE,
+       NF.Hr_Emissao_Nfe DT_EMISSAO_NFE, 
+       DECODE(NF.VER_NFE, 'PD', 'Pendente de envio', 'EN', 'Enviada', 'RE', 'Reenviada', 'FN', 'Finalizada(NFE gerada)', 'CA', 'Solicitar cancelamento da NFE', 'EC', 'Solicitacao de cancelamento enviada', 'RC', 'Reenvio do cancelamento', 'CC', 'NFe cancelada', 'CR', 'RPS cancelado sem ter gerado NFE', 'NI', 'Numeracao Inutilizada', 'RE', 'RPS processado com erro na prefeitura') STATUS_NFE,
+       REG_AMB.VL_TOTAL_CONTA,
+       NF.VL_TOTAL_NOTA VL_TOTAL_NOTA_FISCAL,
+       NF.CD_NOTA_FISCAL,
+       RR.VL_DESCONTO,
+       RR.VL_ACRESCIMO,
+       RR.VL_RECEBIDO,
+       RR.DT_RECEBIMENTO
+--     RR.DT_BAIXA
+       
+
+  FROM DBAMV.ATENDIME          ATENDIME,
+       DBAMV.PACIENTE          PACIENTE,
+       DBAMV.REG_AMB           REG_AMB,
+       DBAMV.REMESSA_FATURA    REMESSA,
+       DBAMV.FATURA            FATURA,
+       DBAMV.CONVENIO,
+       DBAMV.NOTA_FISCAL       NF,
+       DBAMV.ITFAT_NOTA_FISCAL ITFAT,
+       DBAMV.CON_REC           CR,
+       DBAMV.ITCON_REC         IR,
+       DBAMV.RECCON_REC        RR
+
+ WHERE 1 = 1
+      
+   AND REG_AMB.CD_CONVENIO = CONVENIO.CD_CONVENIO
+   AND CONVENIO.TP_CONVENIO = 'P'
+   AND REG_AMB.CD_MULTI_EMPRESA IN (1, 2)
+   AND REG_AMB.CD_REMESSA  = REMESSA.CD_REMESSA(+)
+   AND REMESSA.CD_FATURA   = FATURA.CD_FATURA(+)
+
+   AND FNC_HMSJ_CONTA_RETORNA_ATEND(REG_AMB.Cd_Reg_Amb) = ATENDIME.CD_ATENDIMENTO
+   AND ATENDIME.TP_ATENDIMENTO = 'U'
+   AND ATENDIME.CD_PACIENTE = PACIENTE.CD_PACIENTE   
+        
+   AND REG_AMB.CD_REG_AMB = ITFAT.CD_REG_AMB(+)
+   AND ITFAT.CD_NOTA_FISCAL = NF.CD_NOTA_FISCAL(+)
+   AND NF.NR_ID_NOTA_FISCAL IS NOT NULL -- CONTAS COM NOTAS FISCAIS
+      
+   AND NF.CD_NOTA_FISCAL = CR.CD_NOTA_FISCAL (+)
+   AND CR.CD_CON_REC = IR.CD_CON_REC(+)
+   AND IR.CD_ITCON_REC = RR.CD_ITCON_REC(+)
+ --  AND RR.DT_RECEBIMENTO BETWEEN TO_DATE('01/01/2017', 'DD/MM/YYYY') AND TO_DATE('31/12/2017', 'DD/MM/YYYY')
+   AND ATENDIME.CD_ATENDIMENTO = 1709718 -- AMOSTRA
+-- AND NF.CD_NOTA_FISCAL IN (286870,287167,291656,289647) -- AMOSTRA
+
+ GROUP BY REG_AMB.Cd_Multi_Empresa,
+       REG_AMB.CD_CONVENIO,
+       FNC_HMSJ_CONVENIO(REG_AMB.CD_CONVENIO),
+       ATENDIME.DT_ATENDIMENTO,
+       PACIENTE.CD_PACIENTE,
+       ATENDIME.CD_ATENDIMENTO,
+       PACIENTE.NM_PACIENTE,       
+       PACIENTE.NR_CPF,
+       FNC_HMSJ_RETORNA_RESPONS(ATENDIME.CD_ATENDIMENTO),
+       NF.NM_CLIENTE,
+       NF.NR_CGC_CPF,
+       ATENDIME.HR_ALTA,
+       REG_AMB.CD_REG_AMB,
+       remessa.cd_remessa,
+       FATURA.DT_COMPETENCIA,
+       NF.nr_id_nota_fiscal,
+       NF.dt_emissao,
+       DECODE(NF.CD_STATUS, 'C', 'CANCELADO', 'E', 'ENVIADO', ''),
+       NF.nr_nota_fiscal_nfe,
+       NF.Hr_Emissao_Nfe, 
+       DECODE(NF.VER_NFE, 'PD', 'Pendente de envio', 'EN', 'Enviada', 'RE', 'Reenviada', 'FN', 'Finalizada(NFE gerada)', 'CA', 'Solicitar cancelamento da NFE', 'EC', 'Solicitacao de cancelamento enviada', 'RC', 'Reenvio do cancelamento', 'CC', 'NFe cancelada', 'CR', 'RPS cancelado sem ter gerado NFE', 'NI', 'Numeracao Inutilizada', 'RE', 'RPS processado com erro na prefeitura'),
+       REG_AMB.VL_TOTAL_CONTA,
+       NF.VL_TOTAL_NOTA,
+       NF.CD_NOTA_FISCAL,
+       RR.VL_DESCONTO,
+       RR.VL_ACRESCIMO,
+       RR.VL_RECEBIDO,
+       RR.DT_RECEBIMENTO
+--     RR.DT_BAIXA

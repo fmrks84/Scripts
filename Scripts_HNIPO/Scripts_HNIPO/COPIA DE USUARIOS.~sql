@@ -1,0 +1,5 @@
+begin
+
+dbamv.prc_hnb_copia_perfil (DE => 'ROGERIO.ERMIDA', PARA => 'RENATA.PALLEZE');
+
+END;

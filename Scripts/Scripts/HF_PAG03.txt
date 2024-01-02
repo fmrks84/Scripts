@@ -1,0 +1,101 @@
+SELECT CODIGO_GRUPO_CUSTO,NOME_GRUPO_CUSTO,CODIGO_CONTA_CUSTO,NOME_CONTA_CUSTO,SUM(TOTAL) TOTAL FROM (
+
+SELECT CODIGO_GRUPO_CUSTO,NOME_GRUPO_CUSTO,CODIGO_CONTA_CUSTO,NOME_CONTA_CUSTO,SUM(VALOR_PAGAR) TOTAL FROM (
+SELECT CODIGO_FORNECEDOR,NM_FORNECEDOR,CODIGO_GRUPO_CUSTO,NOME_GRUPO_CUSTO,CODIGO_CONTA_CUSTO,NOME_CONTA_CUSTO,DT_QUITACAO,SUM(VL_LIQUIDO) VALOR_PAGAR FROM
+(
+Select  decode(cp.cd_fornecedor,null,cp.ds_fornecedor,cp.cd_fornecedor) CODIGO_FORNECEDOR,
+        cp.cd_multi_empresa
+--      ,cp.cd_con_pag
+      ,decode(cp.cd_fornecedor, null, cp.ds_fornecedor, decode( 'F','F',fn.nm_fantasia,'R',fn.nm_fornecedor )) NM_FORNECEDOR
+      ,cp.cd_reduzido
+--      ,cp.nr_documento
+      ,it.dt_quitacao
+      ,it.vl_duplicata vl_liquido
+--      ,sum(nvl(pg.vl_pago,0)) vl_pago
+      , gr.cd_gru_res  CODIGO_GRUPO_CUSTO
+      , gr.ds_gru_res  NOME_GRUPO_CUSTO
+      , ir.cd_item_res CODIGO_CONTA_CUSTO
+      , ir.ds_item_res NOME_CONTA_CUSTO
+
+ From dbamv.con_pag cp
+     ,dbamv.itcon_pag it
+     ,dbamv.pagcon_pag pg
+     ,dbamv.processo pc
+     ,dbamv.fornecedor fn
+     ,dbamv.item_res ir
+     ,dbamv.ratcon_pag rp
+     ,dbamv.gru_res gr
+     ,dbamv.mov_concor mc
+
+Where
+      ir.cd_gru_res = gr.cd_gru_res
+  and cp.cd_con_pag = it.cd_con_pag
+  and cp.cd_processo = pc.cd_processo
+  and cp.vl_bruto_conta > 0
+  and it.cd_itcon_pag = pg.cd_itcon_pag (+)
+  and cp.cd_fornecedor = fn.cd_fornecedor (+)
+  and pc.cd_estrutural <> '1.2.1.1.5'
+  and nvl(pg.vl_pago,0) > 0
+  and cp.cd_tip_doc not in (12)
+  and rp.cd_con_pag = cp.cd_con_pag
+  and ir.cd_item_res = rp.cd_item_res
+  and MC.cd_pagcon_pag(+) = PG.cd_pagcon_pag
+&FORMULA_DATA
+&FORMULA_EMPRESA1
+&FORMULA_CONCILIADO
+  
+group by cp.cd_multi_empresa
+        ,cp.cd_con_pag
+        ,cp.cd_fornecedor
+        ,cp.ds_fornecedor
+        ,fn.nm_fantasia
+        ,fn.nm_fornecedor
+        ,cp.cd_reduzido
+        ,cp.nr_documento
+        ,it.dt_quitacao
+        ,it.vl_duplicata
+        ,gr.cd_gru_res
+        ,gr.ds_gru_res
+        ,ir.cd_item_res
+        ,ir.ds_item_res        
+
+Order By nm_fornecedor
+)
+GROUP BY CODIGO_FORNECEDOR,NM_FORNECEDOR,CODIGO_GRUPO_CUSTO,NOME_GRUPO_CUSTO,CODIGO_CONTA_CUSTO,NOME_CONTA_CUSTO,DT_QUITACAO
+ORDER BY DT_QUITACAO,VALOR_PAGAR
+)
+GROUP BY CODIGO_GRUPO_CUSTO,NOME_GRUPO_CUSTO,CODIGO_CONTA_CUSTO,NOME_CONTA_CUSTO
+
+UNION ALL
+
+SELECT CODIGO_GRUPO_CUSTO,NOME_GRUPO_CUSTO,CODIGO_CONTA_CUSTO,NOME_CONTA_CUSTO,SUM(VALOR_PAGAR) TOTAL FROM (
+Select
+gr.cd_gru_res  CODIGO_GRUPO_CUSTO,
+gr.ds_gru_res  NOME_GRUPO_CUSTO,
+ir.cd_item_res CODIGO_CONTA_CUSTO,
+ir.ds_item_res NOME_CONTA_CUSTO,
+mc.vl_movimentacao  VALOR_PAGAR
+from
+dbamv.gru_res gr,
+dbamv.item_res ir,
+dbamv.mov_concor mc,
+dbamv.lan_concor lc,
+dbamv.empresa_lan_concor ec
+where
+mc.cd_lan_concor in (534,675,671,663,672,666,689,530,716,717,719,727,736) 
+and lc.cd_lan_concor = mc.cd_lan_concor and
+ec.cd_lan_concor = lc.cd_lan_concor and
+ir.cd_item_res = ec.cd_item_res and
+ir.cd_gru_res = gr.cd_gru_res
+&FORMULA_DATAX
+&FORMULA_EMPRESA2
+&FORMULA_CONCILIADO
+group by gr.cd_gru_res,gr.ds_gru_res,ir.cd_item_res,ir.ds_item_res,mc.vl_movimentacao,mc.dt_movimentacao,mc.cd_mov_concor
+)
+GROUP BY CODIGO_GRUPO_CUSTO,NOME_GRUPO_CUSTO,CODIGO_CONTA_CUSTO,NOME_CONTA_CUSTO
+
+ORDER BY NOME_GRUPO_CUSTO,NOME_CONTA_CUSTO
+
+)
+
+GROUP BY CODIGO_GRUPO_CUSTO,NOME_GRUPO_CUSTO,CODIGO_CONTA_CUSTO,NOME_CONTA_CUSTO

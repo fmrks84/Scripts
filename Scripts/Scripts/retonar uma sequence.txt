@@ -1,0 +1,9 @@
+alter sequence NOME_DA_SEQUENCE increment by -22 nocache;
+
+select NOME_DA_SEQUENCE.nextval from dual
+alter sequence NOME_DA_SEQUENCE increment by 1
+
+---
+vc altera a sequencia para ao inves de aumentar diminuir X casas
+chama a sequence com nextval
+depois volta a sequence ao normal

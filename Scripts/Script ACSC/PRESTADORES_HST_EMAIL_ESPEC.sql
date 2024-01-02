@@ -1,0 +1,37 @@
+--update
+SELECT
+pr.cd_prestador,
+pr.nm_prestador,
+pr.ds_codigo_conselho,
+p.ds_especialid especialidade,
+tc.ds_tip_comun_prest
+--pr.ds_obs
+--decode(pr.sn_atuante,'P','Provisorio','S','Atuante','N','Eventual','R','Residente')tipo_participacao,
+--decode(pr.tp_situacao,'I','Inativo','A','Ativo')situacao,
+--pr.dt_inativacao,
+--v.cd_multi_empresa
+
+FROM
+prestador pr
+inner join prestador_tipo_vinculo v on v.cd_prestador = pr.cd_prestador
+and v.cd_multi_empresa = pr.cd_multi_empresa
+inner join prestador_tip_comun tc on tc.cd_prestador = pr.cd_prestador
+inner join esp_med esp on esp.cd_prestador = pr.cd_prestador
+inner join especialid p on p.cd_especialid = esp.cd_especialid
+where v.cd_multi_empresa = 4
+and pr.cd_tip_presta = 68
+and pr.tp_situacao = 'A'
+and tc.cd_tip_comun = 7
+and esp.sn_especial_principal = 'S'
+--pr.cd_multi_empresa = 4
+/*group by
+pr.cd_prestador,
+pr.nm_prestador,
+pr.ds_codigo_conselho,
+pr.sn_atuante,
+pr.tp_situacao,
+pr.dt_inativacao
+--v.cd_multi_empresa
+having count(nm_prestador) > = 2*/
+order by 2
+--commit

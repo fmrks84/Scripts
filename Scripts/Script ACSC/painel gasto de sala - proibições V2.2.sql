@@ -1,0 +1,157 @@
+select 
+    CODIGO_CASA,
+    DT_AVISO,
+    NR_AVISO_CIR,
+    NM_PACIENTE,
+    NM_CONVENIO,
+    SUM(QT_MOVIMENTACAO)QT_MOVIMENTACAO,
+    SUM(QT_AG_AUTORIZACAO)QT_AG_AUTORIZACAO,
+    SUM(QT_AUTORIZADO)QT_AUTORIZADO,
+    SN_PERTENCE_PACOTE
+    
+from
+(
+select distinct
+       a.cd_multi_empresa CODIGO_CASA,
+       a.cd_mvto_estoque NR_MOV_ESTOQUE,
+       a.cd_estoque CODIGO_ESTOQUE,
+       a.dt_mvto_estoque DATA_MOV_PRODUTO,
+       a.cd_setor COD_SETOR,
+       a.cd_atendimento ,
+       a.Cd_Aviso_Cirurgia NR_AVISO_CIR,
+       TRUNC(K.DT_INICIO_AGE_CIR)DT_AVISO,
+       g.nm_paciente NM_PACIENTE,
+       h.nm_convenio NM_CONVENIO,
+       a.cd_mvto_estoque,  
+       B.CD_PRODUTO,
+       d.cd_pro_fat,
+       c.ds_produto,
+       b.qt_movimentacao,
+       CASE 
+         WHEN e.tp_situacao  = 'P'
+         THEN UPPER('pendente')
+         WHEN e.tp_situacao  = 'S'
+         THEN UPPER('solicitada')
+         WHEN e.tp_situacao  = 'A'
+         THEN UPPER('autorizada')
+         WHEN e.tp_situacao  = 'G'
+         THEN UPPER('negociação')
+         END STATUS_AUTORIZACAO,
+       CASE
+         WHEN e.tp_situacao IN ('P','S','G')
+         THEN 1 ELSE 0
+         END QT_AG_AUTORIZACAO , 
+        CASE
+         WHEN e.tp_situacao IN ('A')
+         THEN 1 ELSE 0
+         END QT_AUTORIZADO,
+      --   D.QT_AUTORIZADO,
+         case when m.cd_conta_pacote is null
+         then 'NÃO' else 'SIM' END SN_PERTENCE_PACOTE,
+         (select x.ds_pro_fat from pro_Fat x where x.cd_pro_fat = pkt.cd_pro_fat_pacote)nm_pacote
+ 
+ 
+      from mvto_estoque a 
+inner join itmvto_estoque b on b.cd_mvto_estoque = a.cd_mvto_estoque
+inner join produto c on c.cd_produto = b.cd_produto
+inner join it_guia d on d.cd_pro_fat = c.cd_pro_fat 
+inner join guia e on e.cd_guia = d.cd_guia and e.cd_atendimento = a.cd_atendimento 
+inner join atendime f on f.cd_atendimento = a.cd_atendimento
+inner join paciente g on g.cd_paciente = f.cd_paciente
+inner join convenio h on h.cd_convenio = f.cd_convenio
+inner join itreg_fat i on i.cd_mvto = a.cd_mvto_estoque
+                         and i.cd_itmvto = b.cd_itmvto_estoque
+left join proibicao j on j.cd_convenio = f.cd_convenio
+                          and j.cd_con_pla = f.cd_con_pla
+                          and j.cd_multi_empresa = f.cd_multi_empresa
+                          and j.cd_pro_fat = i.cd_pro_fat
+inner join age_cir k on k.cd_aviso_cirurgia = a.cd_aviso_cirurgia
+left join conta_pacote m on m.cd_conta_pacote = i.cd_conta_pacote 
+left join pacote pkt on pkt.cd_pacote = m.cd_pacote                                                       
+where trunc(k.dt_inicio_age_cir)between '11/08/2021' and '12/08/2021'
+and a.cd_multi_empresa = 7
+and a.Cd_Aviso_Cirurgia = 207048
+--and b.cd_produto = 2024929
+order by nm_paciente, ds_produto
+)GROUP BY 
+        CODIGO_CASA,
+        NR_AVISO_CIR,
+        DT_AVISO,
+        cd_atendimento,
+        NM_PACIENTE,
+        NM_CONVENIO,
+        SN_PERTENCE_PACOTE
+order by dt_aviso,
+         nm_paciente
+         
+;
+
+select distinct
+       a.cd_multi_empresa CODIGO_CASA,
+       a.cd_mvto_estoque NR_MOV_ESTOQUE,
+       a.cd_estoque CODIGO_ESTOQUE,
+       a.dt_mvto_estoque DATA_MOV_PRODUTO,
+    --   a.cd_setor COD_SETOR,
+       a.Cd_Aviso_Cirurgia NR_AVISO_CIR,  
+       TRUNC(K.DT_INICIO_AGE_CIR)DT_AVISO,
+       a.cd_atendimento ,
+       g.nm_paciente NM_PACIENTE,
+       h.nm_convenio NM_CONVENIO,
+       d.cd_pro_fat,
+       B.CD_PRODUTO,
+       c.ds_produto,
+       b.qt_movimentacao,
+       CASE 
+         WHEN e.tp_situacao  = 'P'
+         THEN UPPER('pendente')
+         WHEN e.tp_situacao  = 'S'
+         THEN UPPER('solicitada')
+         WHEN e.tp_situacao  = 'A'
+         THEN UPPER('autorizada')
+         WHEN e.tp_situacao  = 'G'
+         THEN UPPER('negociação')
+         END STATUS_AUTORIZACAO,
+       CASE
+         WHEN e.tp_situacao IN ('P','S','G')
+         THEN 1 ELSE 0
+         END QT_AG_AUTORIZACAO , 
+        CASE
+         WHEN e.tp_situacao IN ('A')
+         THEN 1 ELSE 0
+         END QT_AUTORIZADO,
+         case when m.cd_conta_pacote is null
+         then 'NÃO' else 'SIM' END SN_PERTENCE_PACOTE,
+         (select x.ds_pro_fat from pro_Fat x where x.cd_pro_fat = pkt.cd_pro_fat_pacote)nm_pacote
+        
+        from mvto_estoque a 
+inner join itmvto_estoque b on b.cd_mvto_estoque = a.cd_mvto_estoque
+inner join produto c on c.cd_produto = b.cd_produto
+inner join it_guia d on d.cd_pro_fat = c.cd_pro_fat 
+inner join guia e on e.cd_guia = d.cd_guia and e.cd_atendimento = a.cd_atendimento 
+inner join atendime f on f.cd_atendimento = a.cd_atendimento
+inner join paciente g on g.cd_paciente = f.cd_paciente
+inner join convenio h on h.cd_convenio = f.cd_convenio
+inner join itreg_fat i on i.cd_mvto = a.cd_mvto_estoque
+                         and i.cd_itmvto = b.cd_itmvto_estoque
+left join proibicao j on j.cd_convenio = f.cd_convenio
+                          and j.cd_con_pla = f.cd_con_pla
+                          and j.cd_multi_empresa = f.cd_multi_empresa
+                          and j.cd_pro_fat = i.cd_pro_fat
+inner join age_cir k on k.cd_aviso_cirurgia = a.cd_aviso_cirurgia
+left join conta_pacote m on m.cd_conta_pacote = i.cd_conta_pacote 
+left join pacote pkt on pkt.cd_pacote = m.cd_pacote                                                        
+where trunc(k.dt_inicio_age_cir) between '11/08/2021' and '12/08/2021'
+and a.cd_multi_empresa = 7
+and a.Cd_Aviso_Cirurgia = 207048
+order by dt_aviso ,nm_paciente
+;
+
+/*
+select x1.cd_mvto_estoque,
+       x1.cd_itmvto_estoque,
+       x1.cd_produto,
+       x.dt_mvto_estoque,
+       x.hr_mvto_estoque from Mvto_Estoque x
+inner join Itmvto_Estoque x1 on x1.cd_mvto_estoque = x.cd_mvto_estoque
+where x.cd_aviso_cirurgia = 207048
+and x.tp_mvto_estoque <> 'C'*/

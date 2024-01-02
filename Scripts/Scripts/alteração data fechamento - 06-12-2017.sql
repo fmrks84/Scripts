@@ -1,0 +1,28 @@
+Select cd_atendimento, cd_reg_fat, cd_convenio, Dt_Inicio, Dt_Final, cd_multi_empresa , dt_fechamento, Vl_Total_Conta, cd_remessa 
+From Dbamv.Reg_Fat Where Nvl(Cd_Conta_Pai, Cd_Reg_Fat) in (1467004,
+1449573,
+1449573,
+1449632,
+1449759,
+1453256,
+1453256,
+1455896,
+1456651,
+1456691,
+1456691,
+1457310,
+1458103,
+1460352,
+1460643,
+1461220,
+1461700,
+1461700,
+1462199,
+1463250,
+1463250,
+1465890,
+1466324,
+1466444,
+1467640)
+and reg_Fat.Cd_Convenio not in (352,379)--1321675--13279681159809--1117033--
+Order By 1 -- for update

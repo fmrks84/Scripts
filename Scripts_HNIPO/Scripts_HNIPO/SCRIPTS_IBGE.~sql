@@ -1,0 +1,13 @@
+select 
+*
+from
+(
+select length (A.CD_IBGE)IBGE,
+       A.CD_CIDADE,
+       A.NM_CIDADE,
+       A.CD_IBGE
+from dbamv.CIDADE a
+where  1 =1 --a.cd_paciente = 2548803-- from dual -- = (9)
+)where IBGE < 07
+
+order by 1
