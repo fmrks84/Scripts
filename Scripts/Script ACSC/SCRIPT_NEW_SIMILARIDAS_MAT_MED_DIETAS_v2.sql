@@ -41,11 +41,11 @@ and cls.cd_especie = pd.cd_especie
 inner join dbamv.sub_clas scls on scls.cd_sub_cla = pd.cd_sub_cla
 and scls.cd_classe = pd.cd_classe
 and scls.cd_especie = pd.cd_especie
-inner join dbamv.empresa_produto emp on emp.cd_produto = pd.cd_produto and
-emp.cd_multi_empresa = 1
 inner join dbamv.tuss ts on ts.cd_pro_fat = pf.cd_pro_fat and ts.cd_tip_tuss in (00,19,20)
+inner join dbamv.empresa_produto emp on emp.cd_produto = pd.cd_produto and
+emp.cd_multi_empresa =  ts.cd_multi_empresa
 and ts.dt_fim_vigencia is null
-and ts.cd_multi_empresa in (3)
+and ts.cd_multi_empresa in (3) -- coloar a codigo da empresa 
 left join dbamv.convenio conv on conv.cd_convenio = ts.cd_convenio
 inner join dbamv.val_pro vp on vp.cd_pro_fat = pf.cd_pro_fat
 left join dbamv.imp_simpro imp on imp.cd_pro_fat = vp.cd_pro_fat 
@@ -55,12 +55,7 @@ and ibra.cd_tab_fat = vp.cd_tab_fat
 inner join dbamv.lab_pro lpro on lpro.cd_produto = pd.cd_produto
 where trunc(vp.dt_vigencia) = (select max(x.dt_vigencia) from val_pro x where x.cd_pro_fat = vp.cd_pro_fat
 and vp.cd_tab_fat = x.cd_tab_fat)
---and ts.cd_multi_empresa = 3 -- filtro
---and ts.cd_convenio in  (5)--(&par_convenio) -- filtro traze
---and pd.cd_especie in (&par_especie) -- filtro
---and gp.cd_gru_pro in (&par_gru_pro) 
---and pf.cd_pro_fat = '09000220'
---and ts.cd_convenio is null
+and ts.cd_convenio  IS NULL -- aqui você colocar se irá trazer aberto quando colocar 'is null' ou se colocar o codigo do convenio deve alterar para in () para que traga fechado
 order by pd.cd_produto
 
 /*select 
@@ -76,3 +71,5 @@ inner join dbamv.especie esp on esp.cd_especie = pd.cd_especie
 where pd.cd_especie not in (5,9,11,21)
 order by pd.cd_especie 
 */
+
+--select * from empresa_convenio where cd_convenio = 107
