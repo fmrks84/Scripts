@@ -1,7 +1,7 @@
 select cd_multi_empresa, cd_atendimento
 from atendime
 where cd_atendimento in 
-(5367161)--(4905377,4905636,4906190,4914786,4914193,4910159,4911160)--Empresa 4
+(5681293)--(4905377,4905636,4906190,4914786,4914193,4910159,4911160)--Empresa 4
 order by 2
 --(4908175,1910758,4910857,4911449,4912165,4912356,4912493,4912656,4912751,4912910,4913483)
 ;
@@ -27,7 +27,7 @@ inner join it_protocolo_doc it on (p.cd_protocolo_doc = it.cd_protocolo_doc)
 inner join setor s on (s.cd_setor = p.cd_setor)
 inner join setor s2 on (s2.cd_setor = p.cd_setor_destino)
 inner join dbasgu.vw_usuarios u on u.CD_USUARIO = p.nm_usuario_envio
-where it.cd_atendimento in (5367161)--(4905377,4905636,4906190,4914786,4914193,4910159)
+where it.cd_atendimento in (5681293)--(4905377,4905636,4906190,4914786,4914193,4910159)
 --and p.cd_setor_destino in (3294)
 order by  p.dt_envio desc
 ;
@@ -35,7 +35,7 @@ order by  p.dt_envio desc
 
 3729 - FATURAMENTO SUS - 3733
 1074 - SPP SERV DE PRONT DO PACIENTE - 85
-select * from setor where  cd_multi_empresa = 7 order by 2 --and --cd_Setor in (3729,1043,1074,3727) order by 2
+select * from setor where  cd_multi_empresa = 10 order by 2 --and --cd_Setor in (3729,1043,1074,3727) order by 2
 select * from setor where  cd_Setor in (3733) order by 2
 
 
@@ -44,7 +44,7 @@ select * from setor where  cd_Setor in (3733) order by 2
 commit;*/
 update dbamv.protocolo_doc x set x.cd_setor = 3733  where x.cd_setor = 937 and x.cd_protocolo_doc = 3528330--;
 --commit;
-update dbamv.protocolo_doc x set x.Cd_Setor_Destino = 3733 where x.cd_setor_destino = 3729 and x.cd_protocolo_doc = 3841534--;
+update dbamv.protocolo_doc x set x.Cd_Setor_Destino = 1351 where x.cd_setor_destino = 1145 and x.cd_protocolo_doc = 3863994--;
 --commit;
 
 --M2307/0030

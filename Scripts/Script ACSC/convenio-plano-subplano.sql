@@ -34,7 +34,7 @@ inner join regra rg on rg.cd_regra = ecpla.cd_regra
 inner join itregra irg on irg.cd_regra = rg.cd_regra and rg.cd_regra = irg.cd_regra
 inner join tab_fat tf on tf.cd_tab_fat = irg.cd_tab_fat
 where 
-conv.nm_convenio like '%MARIN%'
+1 =1 --conv.nm_convenio like '%MARIN%'
 --conv.cd_convenio  in (104,218)
 --conv.cd_convenio IN (185)
 --and 

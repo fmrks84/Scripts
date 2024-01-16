@@ -1,7 +1,7 @@
 select cd_multi_empresa, cd_atendimento
 from atendime
 where cd_atendimento in 
-(5700616)--(4905377,4905636,4906190,4914786,4914193,4910159,4911160)--Empresa 4
+(5367161)--(4905377,4905636,4906190,4914786,4914193,4910159,4911160)--Empresa 4
 order by 2
 --(4908175,1910758,4910857,4911449,4912165,4912356,4912493,4912656,4912751,4912910,4913483)
 ;
@@ -27,9 +27,9 @@ inner join it_protocolo_doc it on (p.cd_protocolo_doc = it.cd_protocolo_doc)
 inner join setor s on (s.cd_setor = p.cd_setor)
 inner join setor s2 on (s2.cd_setor = p.cd_setor_destino)
 inner join dbasgu.vw_usuarios u on u.CD_USUARIO = p.nm_usuario_envio
-where it.cd_atendimento in (5700616)--(4905377,4905636,4906190,4914786,4914193,4910159)
+where it.cd_atendimento in (5367161)--(4905377,4905636,4906190,4914786,4914193,4910159)
 --and p.cd_setor_destino in (3294)
-order by 7 desc
+order by  p.dt_envio desc
 ;
 
 
