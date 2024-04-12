@@ -13,6 +13,7 @@ select decode (cd_ori_ate,1,'04',2,'03',3,'05',4,'05',5,'05',6,'03',9,'11',10,'1
 Versão 4.0 -- (11 Pronto Socorro será alterado p/ 04 Consulta --- 05 Exame Ambul. será alterado 23 Exame)
 select decode (cd_ori_ate,1,'04',2,'03',3,'23',4,'23',5,'23',6,'03',9,'04',10,'04',11,'23',12,'03',13,'23',14,'03',16,'23',17,'23',18,'03',19,'03',20,'04',22,'03',23,'03',24,'03',62,'03',63,'04',64,'04',65,'04',66,'03',67,'03',68,'03',101,'04',121,'13',541,'13',561,'04',601,'04',602,'04',621,'04',622,'04',721,'04',741,'04',821,'13') from atendime where cd_atendimento = :par1 
 
+3.03.01
 ---------------------------------------------------------------------------
 CSSJ
 
@@ -71,10 +72,10 @@ query alternativa
 baseada coom o padrão Bradesco Saude
 
 VERSAO 3.0
-select decode(cd_ori_ate,782,'05',783,'05',786,'11',787,'04',788,'05',790,'04',792,'04',793,'04',794,'04') from atendime where cd_atendimento = :par1
+select decode(cd_ori_ate,782,'05',783,'05',786,'11',787,'04',788,'05',790,'04',792,'04',793,'04',794,'04',901,'04') from atendime where cd_atendimento = :par1
 
 Versão 4.0 -- (11-Pronto Socorro será alterado p/ 04 Consulta --- 05 Exame Ambul. será alterado 23 Exame)
-select decode(cd_ori_ate,782,'23',783,'23',786,'04',787,'04',788,'23',790,'04',792,'04',793,'04',794,'04') from atendime where cd_atendimento = :par1
+select decode(cd_ori_ate,782,'23',783,'23',786,'04',787,'04',788,'23',790,'04',792,'04',793,'04',794,'04',901,'04') from atendime where cd_atendimento = :par1
 
 ---------------------------------------------------------------------------
 

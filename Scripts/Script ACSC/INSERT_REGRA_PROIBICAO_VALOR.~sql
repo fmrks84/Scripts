@@ -1,0 +1,17 @@
+insert into dbamv.regra_proibicao_valor (CD_REGRA_PROIBICAO_VALOR, CD_CONVENIO, CD_CON_PLA, CD_TAB_FAT, TP_TAB_FAT, TP_GRU_PRO, CD_GRU_PRO, DT_INICIAL_PROIBICAO, TP_PROIBICAO, TP_ATENDIMENTO, VL_BASE, SN_ATIVO, DT_REGISTRO, NM_USUARIO_REGISTROU, DT_DESATIVOU, NM_USUARIO_DESATIVOU)
+values (seq_regra_proibicao_valor.nextval, 41, null, null, 'R', 'MT', null, to_date('06-03-2024', 'dd-mm-yyyy'), 'AG', 'T', 4000.0000, 'S', to_date('29-02-2024 16:14:02', 'dd-mm-yyyy hh24:mi:ss'), 'ACDEOLIVEIRA', null, null);
+commit;
+
+select *  from regra_proibicao_valor where cd_convenio = 41 and cd_Regra_proibicao_valor = 284 ;
+select * from proibicao where cd_convenio = 41 and proibicao.cd_regra_proibicao_valor = 284 
+
+select 
+DISTINCT 
+PF.CD_PRO_FAT
+from dbamv.pro_Fat pf 
+inner join dbamv.gru_pro gp on gp.cd_gru_pro = pf.cd_gru_pro
+INNER JOIN VAL_PRO VP ON VP.CD_PRO_FAT = PF.CD_PRO_FAT AND VP.CD_TAB_FAT = 2
+WHERE VP.VL_TOTAL > = '4000,00'
+and gp.tp_gru_pro = 'MT' --and gp.cd_gru_pro = 
+and pf.sn_ativo = 'S'
+order by 1

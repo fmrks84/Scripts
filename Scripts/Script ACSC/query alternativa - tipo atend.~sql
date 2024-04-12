@@ -71,10 +71,11 @@ query alternativa
 baseada coom o padrão Bradesco Saude
 
 VERSAO 3.0
-select decode(cd_ori_ate,782,'05',783,'05',786,'11',787,'04',788,'05',790,'04',792,'04',793,'04',794,'04') from atendime where cd_atendimento = :par1
+select decode(cd_ori_ate,782,'05',783,'05',786,'11',787,'04',788,'05',790,'04',792,'04',793,'04',794,'04',901,'04') from atendime where cd_atendimento = :par1
 
 Versão 4.0 -- (11-Pronto Socorro será alterado p/ 04 Consulta --- 05 Exame Ambul. será alterado 23 Exame)
-select decode(cd_ori_ate,782,'23',783,'23',786,'04',787,'04',788,'23',790,'04',792,'04',793,'04',794,'04') from atendime where cd_atendimento = :par1
+select decode(cd_ori_ate,782,'23',783,'23',786,'04',787,'04',788,'23',790,'04',792,'04',793,'04',794,'04',901,'04') from atendime where cd_atendimento = :par1
 
 ---------------------------------------------------------------------------
 
+select * from ori_ate where cd_multi_empresa = 7 

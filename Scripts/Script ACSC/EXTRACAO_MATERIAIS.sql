@@ -25,6 +25,7 @@ ts.cd_tip_tuss tab_tuss,
 ts.cd_tuss,
 ts.ds_tuss,
 vp.cd_tab_fat,
+pd.vl_ultima_entrada,
 vp.vl_total,
 ts.cd_multi_empresa,
 ts.cd_convenio,
@@ -110,3 +111,4 @@ and ts.dt_fim_vigencia is null
 --ORDER BY pd.cd_produto,ts.cd_convenio
 
 
+select * from glosas

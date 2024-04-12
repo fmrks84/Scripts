@@ -1,0 +1,8 @@
+prompt Importing table site_projeto...
+set feedback off
+set define off
+
+insert into site_projeto (SN_ATIVO, VL_ABA_WIZARD, SN_ATIVA_SN_ATIVO, DS_PROJETO, TP_PROJETO, CD_SITE_PROJETO)
+values ('S', 1, 'N', 'PROJETO TISS', 'C', 481);
+
+prompt Done.

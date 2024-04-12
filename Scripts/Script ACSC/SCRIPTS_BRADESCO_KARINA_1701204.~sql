@@ -8,16 +8,24 @@ dbamv.tab_Fat tf
 where tf.ds_tab_fat like 'HSC%'*/
 
 select 
+distinct 
 pd.cd_produto,
 pd.ds_produto,
-pd.cd_especie||' - '||esp.ds_especie especie,
-pd.cd_classe||' - '||cl.ds_classe classe,
-pd.cd_sub_cla||' - '||slc.ds_sub_cla sub_classe,
+pd.cd_especie,
+esp.ds_especie ,
+pd.cd_classe,
+cl.ds_classe,
+pd.cd_sub_cla,
+slc.ds_sub_cla,
 isp.cd_simpro,
-pf.cd_pro_fat||' - '||pf.ds_pro_fat procedimento,
-ts.cd_tip_tuss||' - '||tp.ds_tip_tuss tab_tuss,
-ts.cd_tuss||' - '||ts.ds_tuss tuss,
-ts.cd_convenio||' - '||conv.nm_convenio convenio,
+pf.cd_pro_fat,
+pf.ds_pro_fat,
+ts.cd_tip_tuss,
+tp.ds_tip_tuss,
+ts.cd_tuss,
+ts.ds_tuss tuss,
+ts.cd_convenio,
+conv.nm_convenio,
 CASE WHEN pd.ds_produto not like '%REF%' THEN null
      else SubStr(pd.ds_produto,instr(pd.ds_produto,' REF')+5,50)
      end referencia,

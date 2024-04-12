@@ -1,7 +1,8 @@
 select * from dbamv.reg_Fat where cd_Atendimento = 4577189--cd_reg_Fat in (505295);
 select * from sys.itreg_fat_audit a where  a.cd_reg_Fat in (575817)order by a.dt_aud desc ---(304957)
 
-select * from sys.itreg_amb_audit b where b.cd_reg_amb = (mento = 3998547  order by c.dt_aud desc ---and c.o_cd_pro_fat = 28458391-- c.n_cd_gru_fat = 6--c.cd_reg_amb = 505295    --and (c.o_cd_pro_fat = 00115140 or c.n_cd_pro_fat = 00115140) order by c.dt_aud desc 
+select * from sys.itreg_amb_audit b where b.cd_reg_amb = 
+= (mento = 3998547  order by c.dt_aud desc ---and c.o_cd_pro_fat = 28458391-- c.n_cd_gru_fat = 6--c.cd_reg_amb = 505295    --and (c.o_cd_pro_fat = 00115140 or c.n_cd_pro_fat = 00115140) order by c.dt_aud desc 
 select * from itreg_amb where cd_reg_amb = 1849635 --
 
 
@@ -10,7 +11,7 @@ select * from regra_substituicao_proced z where z.cd_pro_fat in  (40304108,40304
 
 select * from sys.itreg_fat_audit x where  x.cd_reg_Fat in (577585)--,479796)--(304957)
 
-select * from sys.reg_fat_audit where /*o_cd_atendimento = 4688994 and*/ cd_reg_Fat = 5283659   order by dt_aud desc 
+select * from sys.reg_fat_audit where /*o_cd_atendimento = 4688994 and*/ cd_reg_Fat = 4831674   order by dt_aud desc 
 
 select * from sys.itreg_fat_audit where cd_lancamento = 131
 

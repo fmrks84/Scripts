@@ -1,5 +1,6 @@
 select * from DBAMV.V_TISS_STATUS_PROTOCOLO A      -- 1° 
-where a.cd_remessa in (363715,366791,326066)--(195899);
+where a.cd_remessa in (370309)--(195899);
+
 
 delete from tiss_lote b where b.id_pai in (2889619, 3322322, 3322333) --for update; -- 2° colocar o id da tabela  V_TISS_STATUS_PROTOCOLO
 
@@ -13,3 +14,8 @@ select * from remessa_fatura where cd_remessa = 371206;
 select * from fatura where cd_fatura = 50988
 
 --select * from tiss_mensagem z where z.nr_lote = 19718 for update  -- 19529/ 19718
+
+select * from itfat_nota_fiscal nf where nf.cd_remessa = 390521
+select * from nota_Fiscal where cd_nota_Fiscal = 664098,
+select * from con_Rec rc where rc.cd_nota_fiscal = 664098
+select * from itcon_Rec where cd_con_rec in (select rc.cd_con_rec from con_Rec rc where rc.cd_nota_fiscal = 664098)

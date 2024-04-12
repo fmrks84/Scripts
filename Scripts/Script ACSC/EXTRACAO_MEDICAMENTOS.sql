@@ -48,14 +48,16 @@ inner join gru_pro gp on gp.cd_gru_pro = pf.cd_gru_pro
 left join val_pro vp on vp.cd_pro_fat = pf.cd_pro_fat 
 inner join tab_Fat tf on tf.cd_tab_fat = vp.cd_tab_fat
 where trunc(vp.dt_vigencia) = (select max(x.dt_vigencia) from val_pro x where x.cd_pro_fat = vp.cd_pro_fat and x.cd_tab_fat = vp.cd_tab_fat)
-and ts.cd_multi_empresa = 7 -- filtro empresa 
+and ts.cd_multi_empresa = 25 -- filtro empresa 
 and ts.cd_tip_tuss in (19,20,00) -- manter 
---and gp.cd_gru_pro in (7,12,15,43,44,71,92,94) -- MEDICAMENTO   
-and gp.cd_gru_pro in (8,9,89,91,95,96)
-and ts.cd_convenio is null -- aqui quando o convenio for null  
+and gp.cd_gru_pro in (7,12,15,43,44,71,92,94) -- MEDICAMENTO   
+--and gp.cd_gru_pro in (8,9,89,91,95,96)
+and (ts.cd_convenio is null or ts.cd_convenio in (205,206)) -- aqui quando o convenio for null  
 and ts.dt_fim_vigencia is null
 order by pd.cd_produto,
          vp.cd_tab_fat
+         
+--select * from gru_pro where ds_gru_pro like '%MEDICAM%'---in (7,12,15,43,44,71,92,94)      
 --and pd.cd_produto = 286
 
 /*union all

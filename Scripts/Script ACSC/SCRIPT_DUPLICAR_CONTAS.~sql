@@ -1,5 +1,5 @@
 begin 
-DBAMV.PKG_MV2000.atribui_empresa (7);
+DBAMV.PKG_MV2000.atribui_empresa (4);
 END;
 /
 INSERT INTO dbamv.itreg_fat  ( 

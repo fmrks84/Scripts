@@ -1,8 +1,11 @@
-select /*x.dt_evento,x.cd_site_acao_evento,x.cd_usuario,x.ds_versao,x.ds_host, x.ds_ip_host, x.ds_local_site */ *
+select  *
 from site_evento x where to_date(x.dt_evento,'dd/mm/rrrr') = to_date(sysdate,'dd/mm/rrrr')
-and x.cd_site_acao_evento in (2,3,5,7)
-order by x.dt_evento desc  --order by x.cd_site_evento desc ;
+---and x.cd_site_acao_evento in (2,3,5,7)
+order by X.DT_EVENTO desc  --order by x.cd_site_evento desc ;
 --ALTERADO
 ;
--- aqui é log da elegibilidade 
---select * from site_xml order by 1 desc 
+--V4.01.00-03
+--ACSCPBI02
+--10.1.235.6
+--C:\MV\apps\soulmv_prd\products\sit-e\2022.1.2-RELEASE\
+

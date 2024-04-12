@@ -1,3 +1,10 @@
+select  xx.cd_aviso_cirurgia,xx.cd_convenio,xx.cd_con_pla
+from cirurgia_aviso xx where xx.cd_aviso_cirurgia in (433974);
+
+select xp.tp_opme_vl_referencia from empresa_convenio xp where xp.cd_convenio in 
+ (select xx.cd_convenio  from cirurgia_aviso xx where xx.cd_aviso_cirurgia = 433974);
+
+
 with tab_referencia as (
 select 
 TF.CD_TAB_FAT,
@@ -103,10 +110,10 @@ left join empresa_produto epr on epr.cd_produto = pd.cd_produto and econv.cd_mul
 left join tab_referencia trf on trf.cd_Tab_fat = vp.cd_tab_fat
 where trunc(vp.dt_vigencia) = (select max(trunc(vpx.dt_vigencia))from val_pro vpx where vpx.cd_pro_fat = vp.cd_pro_fat and vpx.cd_tab_fat = vp.cd_tab_fat)
 and gp.cd_gru_pro in (select x.cd_gru_pro from gru_pro x where x.tp_gru_pro in ('MD','OP','MT'))
-and (irg.cd_gru_pro in (9,89,95,96) or pf.sn_opme = 'S')-- grupos opmes deixar fixado 
-and conv.cd_convenio = 5
-and vp.cd_pro_fat in ('00249963') --00016102,70760462
-and cpla.cd_con_pla = 387
+--and (irg.cd_gru_pro in (9,89,95,96) or pf.sn_opme = 'S')-- grupos opmes deixar fixado 
+and conv.cd_convenio = 8
+and vp.cd_pro_fat in ('00127409') --00016102,70760462
+and cpla.cd_con_pla = 1
 and conv.tp_convenio = 'C'
 and conv.sn_ativo = 'S'
 and econv.sn_ativo = 'S'
@@ -138,6 +145,8 @@ econv.tp_opme_vl_referencia,
 trf.tabela_referencia
 order by casa ,conv.cd_convenio, cpla.cd_con_pla--irg.cd_regra,tf.cd_tab_fat,irg.vl_percetual_pago
 
+--select * from pro_fat where cd_pro_fat = '09068018'
+
 /*;
 select * from val_pro where cd_pro_fat = 00275589 and cd_Tab_fat = 2 
 --select * from pro_fat where cd_pro_fat = '00275589'
@@ -151,3 +160,7 @@ select * from gru_pro where cd_gru_pro = 8 */
 --348457--
 --4783017
 --select * from gru_pro where cd_gru_pro = 89
+--select * from cirurgia_Aviso where cd_aviso_cirurgia = 348672
+
+--select * from itreg_fat where cd_reg_fat = 529152
+--select * from sys.itreg_fat_audit x where  x.cd_reg_Fat in (529152)--,479796)--(304957)

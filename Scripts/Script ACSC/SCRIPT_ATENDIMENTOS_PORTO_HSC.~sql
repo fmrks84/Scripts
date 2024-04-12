@@ -1,0 +1,97 @@
+with porto as (
+select 
+conv.cd_convenio,
+conv.nm_convenio,
+cpla.cd_con_pla,
+cpla.ds_con_pla,
+spla.cd_sub_plano,
+spla.ds_sub_plano
+from 
+dbamv.convenio conv 
+inner join dbamv.con_pla cpla on cpla.cd_convenio = conv.cd_convenio
+inner join dbamv.sub_plano spla on spla.cd_convenio = conv.cd_convenio
+and spla.cd_con_pla = cpla.cd_con_pla
+where conv.cd_convenio = 41
+and cpla.cd_con_pla = 13
+and spla.cd_sub_plano in (12,13)
+union all 
+select 
+conv.cd_convenio,
+conv.nm_convenio,
+cpla.cd_con_pla,
+cpla.ds_con_pla,
+spla.cd_sub_plano,
+spla.ds_sub_plano
+from 
+dbamv.convenio conv 
+inner join dbamv.con_pla cpla on cpla.cd_convenio = conv.cd_convenio
+inner join dbamv.sub_plano spla on spla.cd_convenio = conv.cd_convenio
+and spla.cd_con_pla = cpla.cd_con_pla
+where conv.cd_convenio = 41
+and cpla.cd_con_pla = 2
+and spla.cd_sub_plano in (26,27,28,29,30,31,32,33)
+union all
+select 
+conv.cd_convenio,
+conv.nm_convenio,
+cpla.cd_con_pla,
+cpla.ds_con_pla,
+spla.cd_sub_plano,
+spla.ds_sub_plano
+from 
+dbamv.convenio conv 
+inner join dbamv.con_pla cpla on cpla.cd_convenio = conv.cd_convenio
+inner join dbamv.sub_plano spla on spla.cd_convenio = conv.cd_convenio
+and spla.cd_con_pla = cpla.cd_con_pla
+where conv.cd_convenio = 41
+and cpla.cd_con_pla = 1
+and spla.cd_sub_plano in (15,16,17,18,19,20,21,22,23,24)
+order by cd_con_pla , cd_sub_plano
+)
+
+select 
+decode (atd.tp_atendimento,'I','INTERNADO')TP_ATENDIMENTO,
+atd.cd_atendimento,
+prt.nm_convenio,
+prt.ds_con_pla,
+prt.ds_sub_plano,
+pc.nm_paciente,
+atd.dt_atendimento,
+rf.cd_reg_fat conta,
+rf.vl_total_conta,
+rf.sn_fechada
+from 
+dbamv.atendime atd
+inner join dbamv.reg_fat rf on rf.cd_atendimento = atd.cd_atendimento 
+inner join dbamv.paciente pc on pc.cd_paciente = atd.cd_paciente
+inner join porto prt on prt.cd_convenio = atd.cd_convenio
+and prt.cd_con_pla = rf.cd_con_pla
+and prt.cd_sub_plano = atd.Cd_Sub_Plano
+where atd.dt_atendimento between '01/11/2023' and '15/02/2024'
+
+union all 
+
+select 
+distinct
+decode (atdx.tp_atendimento,'U','URGENCIA','A','AMBULATORIO','E','EXTERNO')TP_ATENDIMENTO,
+atdx.cd_atendimento,
+prt.nm_convenio,
+prt.ds_con_pla,
+prt.ds_sub_plano,
+pcx.nm_paciente,
+atdx.dt_atendimento,
+ramb.cd_reg_amb conta,
+ramb.vl_total_conta,
+iramb.sn_fechada
+from 
+dbamv.atendime atdx
+inner join dbamv.itreg_amb iramb on iramb.cd_atendimento = atdx.cd_atendimento
+and iramb.cd_convenio = atdx.cd_convenio 
+and iramb.cd_con_pla = atdx.cd_con_pla
+inner join dbamv.reg_Amb ramb on iramb.cd_reg_amb = ramb.cd_reg_amb
+inner join dbamv.paciente pcx on pcx.cd_paciente = atdx.cd_paciente
+inner join porto prt on prt.cd_convenio = atdx.cd_convenio
+and prt.cd_con_pla = iramb.cd_con_pla
+and prt.cd_sub_plano = atdx.Cd_Sub_Plano
+where atdx.dt_atendimento between '01/11/2023' and '15/02/2024'
+order by tp_atendimento, cd_atendimento

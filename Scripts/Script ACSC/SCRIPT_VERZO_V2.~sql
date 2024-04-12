@@ -1,0 +1,46 @@
+select 
+distinct 
+/*f.cd_multi_empresa,
+e.cd_convenio,
+g.nm_convenio,
+dbamv.fc_acsc_tuss(f.cd_multi_empresa,a.cd_pro_fat,e.cd_convenio,'COD')TUSS,
+a.cd_pro_fat,
+a.ds_pro_fat,
+a.ds_unidade unidade_medida,
+--c.cd_regra,
+d.cd_tab_fat,
+d.ds_tab_fat,
+vp.vl_total
+*/
+count(*)
+
+from 
+dbamv.pro_fat a 
+inner join dbamv.itregra b on b.cd_gru_pro = a.cd_gru_pro
+inner join dbamv.regra c on c.cd_regra = b.cd_regra
+inner join dbamv.tab_Fat d on d.cd_tab_fat = b.cd_tab_fat
+--and d.ds_tab_fat not like '%BRASINDICE%'
+inner join dbamv.con_pla e on e.cd_regra = b.cd_regra
+and e.sn_ativo = 'S'
+inner join dbamv.empresa_con_pla f on f.cd_con_pla = e.cd_con_pla
+and f.cd_convenio = e.cd_convenio
+and f.cd_regra = b.cd_regra
+AND F.SN_ATIVO = 'S'
+inner join dbamv.convenio g on g.cd_convenio = e.cd_convenio and g.sn_ativo = 'S'
+inner join dbamv.val_pro vp on vp.cd_pro_fat = a.cd_pro_fat
+and vp.cd_tab_fat = b.cd_tab_fat
+where trunc(vp.dt_vigencia) = (select max(x.dt_vigencia) from val_pro x where x.cd_pro_fat = vp.cd_pro_fat
+and x.cd_tab_fat = vp.cd_tab_fat)
+and a.cd_gru_pro in (7, 12, 15, 43, 44, 71, 92, 94)
+and a.sn_ativo = 'S'
+and e.cd_convenio not in (43,163,301,441,21,26,27,28,62,63,209,211,212,219,401,559,742,843,983)
+--and e.cd_convenio = 53
+and f.cd_multi_empresa = 4
+--and a.cd_pro_fat = '90458451'
+/*order by
+f.cd_multi_empresa,
+e.cd_convenio*/
+
+
+
+--select * 

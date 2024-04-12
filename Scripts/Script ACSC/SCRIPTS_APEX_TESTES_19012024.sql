@@ -10,7 +10,7 @@ inner join guia g on g.cd_aviso_cirurgia = cr.cd_aviso_cirurgia and g.tp_guia = 
 inner join it_guia gg on gg.cd_guia = g.cd_guia
 where cr.cd_aviso_cirurgia in (/*348467*/348996)
 ;
-select * from produto pd where pd.cd_pro_fat in ('00308756','09006899','09000591')
+select * from produto pd where pd.cd_pro_fat in ('09017310')--('00308756','09006899','09000591')
 
 
 select * from it_guia x where x.cd_guia = 4805878

@@ -10,9 +10,9 @@ x.cd_versao_tiss
  inner join convenio conv on conv.cd_convenio = x.cd_convenio
  inner join empresa_convenio econv on econv.cd_convenio = x.cd_convenio
  where-- x.cd_versao_tiss like ('4.0%')
--- and econv.cd_multi_empresa = 7
+  econv.cd_multi_empresa = 11
  ---x.nr_registro_operadora_ans is not nulll
- conv.nm_convenio like 'AFRESP%' --or conv.nm_convenio like'NOTRE%' -- SULAMAERICA, ALICE,MEDSENIOR,PORTO,CENTRAL NACIONAL
+ --conv.nm_convenio like 'FIO%' --or conv.nm_convenio like'NOTRE%' -- SULAMAERICA, ALICE,MEDSENIOR,PORTO,CENTRAL NACIONAL
  --and x.cd_convenio  in (98,108,501,53,139,186,181)
  --and x.nr_registro_operadora_ans in ('326305','324477','366871')
 -- and econv.cd_multi_empresa = 3
