@@ -1,5 +1,5 @@
 begin 
-DBAMV.PKG_MV2000.atribui_empresa (4);
+DBAMV.PKG_MV2000.atribui_empresa (7);
 END;
 /
 INSERT INTO dbamv.itreg_fat  ( 
@@ -84,7 +84,7 @@ INSERT INTO dbamv.itreg_fat  (
                         ,NR_GUIA_ENVIO                             
                         ,ID_IT_ENVIO   )
  (                        SELECT
-                         566434 --colocar conta nova
+                         650245 --colocar conta nova
                         ,CD_LANCAMENTO                     
                         ,DT_LANCAMENTO 
                         ,HR_LANCAMENTO                              
@@ -165,6 +165,6 @@ INSERT INTO dbamv.itreg_fat  (
                         ,NR_GUIA_ENVIO                             
                         ,ID_IT_ENVIO                               
                         FROM dbamv.ITREG_FAT I
-                        WHERE I.cd_reg_fat= 529573   --colocar conta espelho
+                        WHERE I.cd_reg_fat= 638782   --colocar conta espelho
                         );
 commit;

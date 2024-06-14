@@ -167,4 +167,5 @@ select mv.cd_mvto_estoque from mvto_estoque mv where mv.cd_mvto_estoque = 411819
 
 
 
-select 
+
+

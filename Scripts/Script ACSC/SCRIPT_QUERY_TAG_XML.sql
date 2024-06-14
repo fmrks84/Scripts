@@ -1,5 +1,6 @@
---select * from dbamv.estrutura_srv a1 where a1.cd_id_estrutura_srv in (1072)--for update --;
---select * from dbamv.config_proto b1  where b1.cd_id_estrutura_srv IN (1072)
+select * from dbamv.estrutura_srv a1 where a1.cd_id_estrutura_srv in (1141)--for update --;
+select * from dbamv.config_proto b1  where b1.cd_id_estrutura_srv IN (1141)
+
 
 update
 dbamv.config_proto c 
@@ -33,3 +34,6 @@ inner join dbamv.estrutura_srv c on c.cd_id_estrutura_srv = b.cd_id_estrutura_sr
 where a.cd_convenio not in (147) -- convenio
 and b.cd_multi_empresa = 4 -- empresa 
 and b.cd_id_estrutura_srv = 1521 
+
+
+select * from fluxo_documento x where x.cd_setor_orig = 4133

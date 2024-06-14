@@ -1,6 +1,6 @@
 select 
 distinct 
-/*f.cd_multi_empresa,
+f.cd_multi_empresa,
 e.cd_convenio,
 g.nm_convenio,
 dbamv.fc_acsc_tuss(f.cd_multi_empresa,a.cd_pro_fat,e.cd_convenio,'COD')TUSS,
@@ -11,8 +11,8 @@ a.ds_unidade unidade_medida,
 d.cd_tab_fat,
 d.ds_tab_fat,
 vp.vl_total
-*/
-count(*)
+
+--count(*)
 
 from 
 dbamv.pro_fat a 

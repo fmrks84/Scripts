@@ -35,7 +35,8 @@ and a.cd_gru_pro in (7, 12, 15, 43, 44, 71, 92, 94)
 and a.sn_ativo = 'S'
 and e.cd_convenio not in (43,163,301,441,21,26,27,28,62,63,209,211,212,219,401,559,742,843,983)
 --and e.cd_convenio = 53
-and f.cd_multi_empresa = 4
+and f.cd_multi_empresa = 7
+and g.cd_convenio = 7 
 --and a.cd_pro_fat = '90458451'
 /*order by
 f.cd_multi_empresa,

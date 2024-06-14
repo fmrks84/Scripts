@@ -8,3 +8,4 @@ order by X.DT_EVENTO desc  --order by x.cd_site_evento desc ;
 --ACSCPBI02
 --10.1.235.6
 --C:\MV\apps\soulmv_prd\products\sit-e\2022.1.2-RELEASE\
+

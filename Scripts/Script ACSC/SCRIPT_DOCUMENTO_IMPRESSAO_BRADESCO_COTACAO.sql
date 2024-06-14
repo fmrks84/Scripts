@@ -1,0 +1,86 @@
+---------C2405/12483 
+select 
+      distinct 
+      g.cd_guia numero_solicitacao,
+       g.dt_solicitacao,
+       ''solicitante, --usuario apex ,
+       econv.cd_hospital_no_convenio codigo_referenciado,
+       conv.cd_convenio||' - '||
+       case when conv.cd_convenio in  (7, 73, 156, 190, 303, 308, 377, 641, 661, 663)
+         then 'BRADESCO SAUDE'
+           END nm_convenio,
+           g.cd_senha senha,
+           g.Cd_Aviso_Cirurgia,
+           to_date(ac.dt_prev_inter,'dd/mm/rrrr') data_evento,
+           atd.nr_carteira,
+           pct.nr_cpf,
+           pct.nm_paciente,
+           econv.cd_multi_empresa||' - '||emp.ds_multi_empresa hospital,
+           econv.cd_hospital_no_convenio codigo_referenciado ,
+           emp.nr_ddd_empresa||' '||replace(emp.nr_telefone_empresa,'-','') telefone_hosp,
+           pf.cd_pro_fat,
+           fc_acsc_tuss(econv.cd_multi_empresa,
+                        pf.cd_pro_fat,
+                        conv.cd_convenio,
+                        'COD')Cod_PROCEDIMENTO_BRADESCO,
+                 fc_acsc_tuss(econv.cd_multi_empresa,
+                        pf.cd_pro_fat,
+                        conv.cd_convenio,
+                        'DESC')PROCEDIMENTO_BRADESCO,
+              ig.qt_autorizado qt_solicitada,
+                        fn.nm_fornecedor,
+               fc_acsc_tuss(econv.cd_multi_empresa,
+                        ig.cd_pro_fat,
+                        g.cd_convenio,
+                        'COD')||' - '||
+                fc_acsc_tuss(econv.cd_multi_empresa,
+                        ig.cd_pro_fat,
+                        g.cd_convenio,
+                        'DESC')TUSS_OPME,
+                        vig.cd_rms anvisa,
+                        ''PGO,
+                        ''ND,
+                        ''CH,
+                        atd.cd_prestador,
+                        prt.nm_prestador,
+                        prt.ds_codigo_conselho
+      
+        from dbamv.empresa_convenio econv
+inner join dbamv.convenio conv on conv.cd_convenio = econv.cd_convenio
+inner join dbamv.multi_empresas emp on emp.cd_multi_empresa = econv.cd_multi_empresa
+inner join dbamv.atendime atd on atd.cd_convenio = conv.cd_convenio
+inner join dbamv.paciente pct on pct.cd_paciente = atd.cd_paciente
+inner join dbamv.guia g on g.cd_atendimento = atd.cd_atendimento and g.tp_guia = 'O'
+inner join dbamv.it_guia ig on ig.cd_guia = g.cd_guia and ig.cd_pro_fat is not null 
+and ig.cd_usu_geracao = 'MVINTEGRACAO'
+inner join dbamv.aviso_cirurgia ac on ac.cd_aviso_cirurgia = g.cd_aviso_cirurgia
+and ac.cd_atendimento = atd.cd_atendimento
+inner join dbamv.cirurgia_aviso ca on ca.cd_aviso_cirurgia = ac.cd_aviso_cirurgia
+and ca.cd_convenio = atd.cd_convenio
+inner join dbamv.cirurgia cir on cir.cd_cirurgia = ca.cd_cirurgia and ca.sn_principal = 'S'
+inner join dbamv.pro_fat pf on pf.cd_pro_fat = cir.cd_pro_fat
+inner join dbamv.val_opme_it_guia vig on vig.cd_it_guia = ig.cd_it_guia 
+and vig.cd_guia = ig.cd_guia 
+inner join dbamv.fornecedor fn on fn.cd_fornecedor = vig.cd_fornecedor
+inner join dbamv.prestador prt on prt.cd_prestador = atd.cd_prestador
+where econv.cd_multi_empresa in (3,4,7,11,25) 
+and atd.cd_atendimento = 5295738
+and conv.nm_convenio like 'BRADESCO%'
+order by hospital,
+         nm_convenio
+/* ;
+        
+select * from guia g 
+inner join it_guia gg on gg.cd_guia = g.cd_guia
+where g.cd_convenio = 7 
+and g.cd_aviso_cirurgia is not null 
+and g.tp_guia = 'O'
+and g.cd_atendimento is not null
+and gg.cd_pro_fat is not null 
+and g.cd_atendimento = 5295738
+and gg.cd_usu_geracao = 'MVINTEGRACAO'
+order by g.dt_solicitacao desc */
+
+--        ;
+--select * from aviso_cirurgia where cd_aviso_cirurgia = 367092;
+--select * from cirurgia_aviso where cd_aviso_cirurgia = 367092

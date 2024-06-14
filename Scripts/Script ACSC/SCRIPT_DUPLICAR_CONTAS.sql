@@ -84,7 +84,7 @@ INSERT INTO dbamv.itreg_fat  (
                         ,NR_GUIA_ENVIO                             
                         ,ID_IT_ENVIO   )
  (                        SELECT
-                         650245 --colocar conta nova
+                         683686 --colocar conta nova
                         ,CD_LANCAMENTO                     
                         ,DT_LANCAMENTO 
                         ,HR_LANCAMENTO                              
@@ -165,6 +165,8 @@ INSERT INTO dbamv.itreg_fat  (
                         ,NR_GUIA_ENVIO                             
                         ,ID_IT_ENVIO                               
                         FROM dbamv.ITREG_FAT I
-                        WHERE I.cd_reg_fat= 638782   --colocar conta espelho
+                        WHERE I.cd_reg_fat= 406940   --colocar conta espelho
                         );
 commit;
+
+

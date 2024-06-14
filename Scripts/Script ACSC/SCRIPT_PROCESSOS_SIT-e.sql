@@ -9,3 +9,5 @@ order by X.DT_EVENTO desc  --order by x.cd_site_evento desc ;
 --10.1.235.6
 --C:\MV\apps\soulmv_prd\products\sit-e\2022.1.2-RELEASE\
 
+select * from site_log_evento order by 2 desc 
+

@@ -1,0 +1,53 @@
+---- QUERY ALTERNATIVA PARA GUIA SADT CONVENIO ASSIM  - ID 1487 - 50-CÓDIGO NA OPERADORA
+--- abaixo a query altearnativa 
+---==== select x.operadora from dbamv.vw_acsc_cod_operadora x where x.cd_atendimento = :par1 and x.cd_reg_amb = :par2 and x.cd_lancamento = :par3
+
+create or replace view vw_acsc_cod_operadora as
+select 
+cd_prestador,
+cd_pro_fat,
+tp_pagamento,
+operadora,
+cd_reg_amb,
+cd_atendimento,
+cd_lancamento
+from
+(
+select 
+max(cr.cd_pres_con)cd_pres_con,
+amb.cd_prestador,
+amb.cd_pro_fat,
+amb.tp_pagamento,
+amb.cd_lancamento,
+case when cr.cd_prestador_conveniado is not null and amb.tp_pagamento = 'P' then '8888'
+     when cr.cd_prestador_conveniado is not null and amb.tp_pagamento = 'C' then cr.cd_prestador_conveniado
+     when cr.cd_prestador_conveniado is null then '8888'
+     end operadora,
+amb.cd_reg_amb,
+amb.cd_atendimento
+from 
+dbamv.itreg_amb amb
+left join pres_con cr on cr.cd_prestador = amb.cd_prestador and cr.cd_convenio  in (70, 114, 154, 561)
+and cr.sn_paga_pelo_convenio = 'S'
+and cr.cd_prestador_conveniado <> '8888'
+and cr.cd_prestador_conveniado <> '1'
+where amb.cd_prestador is not null
+group by 
+amb.cd_prestador,
+amb.cd_pro_fat,
+amb.tp_pagamento,
+amb.cd_lancamento,
+cr.cd_prestador_conveniado,
+amb.cd_reg_amb,
+amb.cd_atendimento
+);
+/
+--select x.operadora from dbamv.vw_acsc_cod_operadora x where x.cd_atendimento = :par1 and x.cd_reg_amb = :par2 and x.cd_lancamento = :par3
+
+
+GRANT DELETE,INSERT,SELECT,UPDATE ON dbamv.vw_acsc_cod_operadora TO ACSC_FABIO_SANTOS;
+GRANT DELETE,INSERT,SELECT,UPDATE ON dbamv.vw_acsc_cod_operadora TO RSC_THIAGO_DELFINO;
+GRANT DELETE,INSERT,SELECT,UPDATE ON dbamv.vw_acsc_cod_operadora TO RSC_ANDRE_COSTA;
+/
+
+

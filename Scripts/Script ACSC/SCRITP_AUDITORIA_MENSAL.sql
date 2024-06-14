@@ -61,12 +61,12 @@ select 'Interno'TIPO_ATEND,
    and v.cd_gru_fat = gf.cd_gru_fat
    and v.cd_reg_fat is not null
    --and f.dt_competencia = '01/09/2022'
-  and to_char(f.dt_competencia,'mm/yyyy') = '03/2024'-- between '05/2023' and '06/2023'
+  and to_char(f.dt_competencia,'mm/yyyy') = '05/2024'-- between '05/2023' and '06/2023'
  -- and v.cd_convenio in (7,641)
  --and v.cd_atendimento = 4813316
 -- and r.cd_reg_fat = 557377 
 -- and  v.cd_pro_fat = 10001123
-  -- and r.cd_multi_empresa = 7
+   --and r.cd_multi_empresa = 7
 
 union all
 
@@ -129,7 +129,7 @@ select 'Ambulatorio'TIPO_ATEND ,
  --  and v.cd_atendimento = 4813316
   --AND V.cd_reg_amb = 557377 
   -- and  v.cd_pro_fat = 552236
-   and to_char(f.dt_competencia,'mm/yyyy') = '03/2024' ---between '05/2023' and '06/2023'
+   and to_char(f.dt_competencia,'mm/yyyy') = '05/2024' ---between '05/2023' and '06/2023'
   -- and f.dt_competencia = '01/09/2022'
    --and r.cd_multi_empresa =7
   -- AND v.cd_convenio in (7,641)

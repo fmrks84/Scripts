@@ -1,0 +1,8 @@
+prompt Importing table dbamv.config_proto...
+set feedback off
+set define off
+
+insert into dbamv.config_proto (CD_CONVENIO, NM_CONVENIO, CD_HOSPITAL, CD_MULTI_EMPRESA, CD_PROTO, DS_ID_CLIENTE, CD_ID_ESTRUTURA_SRV, CD_CONFIG_PROTO, TP_UTILIZACAO, CD_CONDICAO1, CD_CONDICAO2, CD_CONDICAO3, DS_VALOR_FIXO, DS_QUERY_ALTERNATIVA, TP_PREENCHIMENTO)
+values (104, 'SUL AMERICA SAUDE', 1825, 3, 3, '000043', 1435, 6628, '1', null, null, null, null, 'select distinct min(to_char(g.dt_autorizacao,''rrrr-mm-dd''))  from dbamv.guia g where g.cd_atendimento = :par2 and g.tp_guia = ''P''', 'N');
+
+prompt Done.
